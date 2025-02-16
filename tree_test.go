@@ -26,9 +26,9 @@ func TestBuild(t *testing.T) {
 	kv := NewKVFile()
 	tree := NewTree(kv)
 	files := map[string]string{
-		"a": "1",
-		"b": "2",
-		"c": "3",
+		"a": "The cat sleeps",
+		"b": "Birds fly high",
+		"c": "Wind blows softly",
 	}
 	mustNil(tree.Build(mapIter(files)))
 }
