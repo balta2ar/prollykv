@@ -18,4 +18,21 @@ func TestCursor(t *testing.T) {
 	cursor := kv.Cursor()
 	cursor.Goto([]byte("b"))
 	require.Equal(t, []byte("b"), cursor.Key())
+	require.Equal(t, []byte("21"), cursor.Value())
+
+	cursor.Next()
+	require.Equal(t, []byte("b1"), cursor.Key())
+	require.Equal(t, []byte("22"), cursor.Value())
+
+	cursor.Next()
+	require.Equal(t, []byte("b2"), cursor.Key())
+	require.Equal(t, []byte("23"), cursor.Value())
+
+	cursor.Next()
+	require.Equal(t, []byte("c"), cursor.Key())
+	require.Equal(t, []byte("3"), cursor.Value())
+
+	cursor.Next()
+	require.Nil(t, cursor.Key())
+	require.Nil(t, cursor.Value())
 }
