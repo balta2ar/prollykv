@@ -24,6 +24,7 @@ func mapIter(m map[string]string) Iter {
 
 func TestBuild(t *testing.T) {
 	kv := NewKVFile()
+	kv.MustReset()
 	tree := NewTree(kv)
 	files := map[string]string{
 		"a": "The cat sleeps",

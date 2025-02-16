@@ -17,7 +17,7 @@ func NewKVFile() *FileSystem {
 	this := &FileSystem{
 		dir: filepath.Join(os.TempDir(), "prollykv"),
 	}
-	this.MustReset()
+	this.MustBaseDir()
 	return this
 }
 
@@ -32,11 +32,19 @@ func (kv *FileSystem) Set(key []byte, value []byte) error {
 	return os.WriteFile(path, value, 0644)
 }
 
-func (kv *FileSystem) MustReset() {
+func (kv *FileSystem) MustCleanup() {
 	err := os.RemoveAll(kv.dir)
 	mustNil(err)
-	err = os.MkdirAll(kv.dir, 0755)
+}
+
+func (kv *FileSystem) MustBaseDir() {
+	err := os.MkdirAll(kv.dir, 0755)
 	mustNil(err)
+}
+
+func (kv *FileSystem) MustReset() {
+	kv.MustCleanup()
+	kv.MustBaseDir()
 }
 
 func (kv *FileSystem) Cursor() Cursor {
