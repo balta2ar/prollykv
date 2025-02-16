@@ -13,7 +13,7 @@ func NewTree(kv KV) *Tree {
 }
 
 func (this *Tree) GetNode(level int8, key []byte) (*Node, error) {
-	entry_key := append([]byte{byte(level)}, key...)
+	entry_key := EncodeKey(level, key)
 	value, err := this.kv.Get(entry_key)
 	if err != nil {
 		return nil, err
@@ -23,8 +23,8 @@ func (this *Tree) GetNode(level int8, key []byte) (*Node, error) {
 }
 
 func (this *Tree) SetNode(node *Node) error {
-	entry_key := append([]byte{byte(node.level)}, node.key...)
-	entry_value := append(node.hash, node.value...)
+	entry_key := EncodeKey(node.level, node.key)
+	entry_value := EncodeValue(node.hash, node.value)
 	return this.kv.Set(entry_key, entry_value)
 }
 
@@ -33,8 +33,15 @@ func (this *Tree) Get(key []byte) ([]byte, error) {
 	// return this.kv.Get(key)
 }
 
-type Iter func(cb func(key []byte, value []byte))
+type Iter func(cb func(key []byte, value []byte) error) error
 
-func (this *Tree) Build(reader Iter) {
-
+func (this *Tree) Build(reader Iter) error {
+	return reader(func(key []byte, value []byte) error {
+		node := NewNode(key, value)
+		err := this.SetNode(node)
+		if err != nil {
+			return err
+		}
+		return nil
+	})
 }

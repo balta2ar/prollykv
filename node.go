@@ -6,7 +6,7 @@ const BoundaryThreshold = 7
 const HashSize = 32
 
 type Node struct {
-	level int
+	level int8
 	key   []byte
 	value []byte
 	hash  []byte
@@ -31,9 +31,7 @@ func (this *Node) equal(that *Node) bool {
 }
 
 func (this *Node) parse(entry_key []byte, entry_value []byte) *Node {
-	this.level = int(entry_key[0])
-	this.key = entry_key[1:]
-	this.hash = entry_value[:HashSize]
-	this.value = entry_value[HashSize:]
+	this.level, this.key = DecodeKey(entry_key)
+	this.hash, this.value = DecodeValue(entry_value)
 	return this
 }

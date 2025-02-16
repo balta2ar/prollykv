@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"sort"
@@ -27,6 +28,7 @@ func (kv *FileSystem) Get(key []byte) ([]byte, error) {
 
 func (kv *FileSystem) Set(key []byte, value []byte) error {
 	path := filepath.Join(kv.dir, string(key))
+	fmt.Printf("Set %q %q\n", path, value)
 	return os.WriteFile(path, value, 0644)
 }
 
