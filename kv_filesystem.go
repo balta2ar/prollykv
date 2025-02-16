@@ -37,7 +37,7 @@ func (kv *FileSystem) MustReset() {
 	mustNil(err)
 }
 
-func (kv *FileSystem) Cursor() *FileSystemCursor {
+func (kv *FileSystem) Cursor() Cursor {
 	return &FileSystemCursor{
 		dir: kv.dir,
 	}

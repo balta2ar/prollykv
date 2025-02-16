@@ -1,8 +1,8 @@
 package main
 
 import (
-	"testing"
 	"sort"
+	"testing"
 )
 
 func mapIter(m map[string]string) Iter {
