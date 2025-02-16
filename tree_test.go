@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"sort"
 	"testing"
 )
@@ -22,14 +23,20 @@ func mapIter(m map[string]string) Iter {
 	}
 }
 
+func generate() map[string]string {
+	m := make(map[string]string)
+	n := 1000
+	w := len(fmt.Sprint(n))
+	for i := 0; i < n; i++ {
+		m[fmt.Sprintf("%0*d", w, i)] = fmt.Sprintf("value %d", i)
+	}
+	return m
+}
+
 func TestBuild(t *testing.T) {
 	kv := NewKVFile()
 	kv.MustReset()
 	tree := NewTree(kv)
-	files := map[string]string{
-		"a": "The cat sleeps",
-		"b": "Birds fly high",
-		"c": "Wind blows softly",
-	}
+	files := generate()
 	mustNil(tree.Build(mapIter(files)))
 }
