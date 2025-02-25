@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"slices"
 	"sort"
 	"strconv"
@@ -37,8 +38,18 @@ func NewTree(kv KV, messages []*Message) *Tree {
 	return tree
 }
 
+func (t *Tree) String() string {
+	var sb strings.Builder
+	for _, level := range t.levels {
+		sb.WriteString(level.String())
+		sb.WriteString("\n")
+	}
+	return sb.String()
+}
+
 type Level struct {
 	level int8
+	size  int
 	tail  *Node
 }
 
@@ -59,20 +70,25 @@ func (l *Level) AsList() []*Node {
 	return nodes
 }
 
+func (l *Level) String() string {
+	return fmt.Sprintf("Level(level=%d, size=%d)", l.level, l.size)
+}
+
 func BaseLevel(messages []*Message) *Level {
 	level := NewLevel(0)
 	var nodes []*Node
 	sort.Slice(messages, func(i, j int) bool {
 		return messages[i].timestamp < messages[j].timestamp
 	})
-	const notTale = false
+	const notTail = false
 	for _, m := range messages {
-		nodes = append(nodes, NewNode(m.timestamp, m.data, notTale))
+		nodes = append(nodes, NewNode(m.timestamp, m.data, notTail))
 	}
-	const isTale = true
-	fakeTail := NewNode(-1, "tail", isTale)
+	const isTail = true
+	fakeTail := NewNode(-1, "tail", isTail)
 	nodes = append(nodes, fakeTail)
 	level.tail = LinkNodes(nodes)[len(nodes)-1]
+	level.size = len(nodes)
 	return level
 }
 
@@ -90,11 +106,12 @@ func NextLevel(prev *Level) *Level {
 	}
 	next := NewLevel(prev.level + 1)
 	next.tail = eligible[len(eligible)-1]
+	next.size = len(eligible)
 	return next
 }
 
 func LinkNodes(nodes []*Node) []*Node {
-	for i := 0; i < len(nodes)-1; i++ {
+	for i := range len(nodes) - 1 {
 		nodes[i].right = nodes[i+1]
 		nodes[i+1].left = nodes[i]
 	}
@@ -133,7 +150,7 @@ type Node struct {
 func NewNode(timestamp int, data string, isTail bool) *Node {
 	payload := strconv.Itoa(timestamp) + data
 	hash := Rehash(payload)
-	this := &Node{
+	node := &Node{
 		timestamp:  timestamp,
 		data:       data,
 		isTail:     isTail,
@@ -141,7 +158,7 @@ func NewNode(timestamp int, data string, isTail bool) *Node {
 		nodeHash:   hash,
 		boundary:   nil,
 	}
-	return this
+	return node
 }
 
 func (n *Node) IsBoundary() bool {
@@ -163,8 +180,12 @@ func (n *Node) CreateHigherLevel() *Node {
 }
 
 func (n *Node) FillMerkleHash() {
-	var bucket []*Node
 	node := n.down
+	if node == nil {
+		return
+	}
+
+	var bucket []*Node
 	bucket = append(bucket, node)
 
 	for node.left != nil {
