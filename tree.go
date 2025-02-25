@@ -2,6 +2,7 @@ package main
 
 import (
 	"crypto/sha256"
+	"encoding/binary"
 	"encoding/hex"
 	"fmt"
 	"slices"
@@ -208,13 +209,22 @@ func (n *Node) FillMerkleHash() {
 	n.merkleHash = BucketHash(bucket)
 }
 
-const BoundaryThreshold = 5
+const AverageBucketSize = 10
+const BoundaryThreshold = uint32((1 << 32) / AverageBucketSize)
 
 func IsBoundaryHash(hash string) bool {
+	hashBytes, _ := hex.DecodeString(hash)
+	value := binary.BigEndian.Uint32(hashBytes[:4])
+	return value < BoundaryThreshold
+}
+
+const BoundaryThresholdBits = 5
+
+func IsBoundaryHash2(hash string) bool {
 	digit := hash[:1]
 	assert(len(digit) == 1, "hash must be a single digit")
 	hashInt, _ := strconv.ParseInt(digit, 16, 64)
-	return hashInt < BoundaryThreshold
+	return hashInt < BoundaryThresholdBits
 }
 
 func Rehash(xs ...string) string {
