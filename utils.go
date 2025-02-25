@@ -2,6 +2,7 @@ package main
 
 import (
 	"crypto/sha256"
+	"encoding/hex"
 	"os"
 )
 
@@ -17,10 +18,10 @@ func mustSlurp(path string) []byte {
 	return data
 }
 
-func rehash(xs ...[]byte) []byte {
+func Rehash(xs ...string) string {
 	h := sha256.New()
 	for _, x := range xs {
-		h.Write(x)
+		h.Write([]byte(x))
 	}
-	return h.Sum(nil)
+	return hex.EncodeToString(h.Sum(nil))
 }
