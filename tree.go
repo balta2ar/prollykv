@@ -3,6 +3,8 @@ package main
 import (
 	"slices"
 	"sort"
+	"strconv"
+	"strings"
 )
 
 type Message struct {
@@ -101,6 +103,113 @@ func LinkNodes(nodes []*Node) []*Node {
 
 // ----------------------------------------------------------------
 
+const HashSize = 32
+
+type Node struct {
+	level      int8
+	timestamp  int
+	data       string
+	up         *Node
+	down       *Node
+	left       *Node
+	right      *Node
+	nodeHash   string // node hash, sha256
+	merkleHash string // rolling merkle hash
+	boundary   *bool
+	isTail     bool
+	// key       []byte
+	// value     []byte
+	// hash       []byte // merkle hash
+}
+
+// types of Nodes
+// boundary / promoted -- leades to node promotion, nodeHash <= BoundaryThreshold
+//   contains rolling merkleHash of the group of non-boundary nodes
+// tail / anchor / fake -- Node(non-data) inserted at each level.
+//   always a boundary node by default. Convas put tail nodes on the left side of the tree.
+//   in this design, it's on the right side.
+//
+
+func NewNode(timestamp int, data string, isTail bool) *Node {
+	payload := strconv.Itoa(timestamp) + data
+	hash := Rehash(payload)
+	this := &Node{
+		timestamp:  timestamp,
+		data:       data,
+		isTail:     isTail,
+		merkleHash: hash,
+		nodeHash:   hash,
+		boundary:   nil,
+	}
+	return this
+}
+
+func (n *Node) IsBoundary() bool {
+	if n.boundary != nil {
+		return *n.boundary
+	}
+	boundary := n.isTail || IsBoundaryHash(n.nodeHash)
+	n.boundary = &boundary
+	return boundary
+}
+
+func (n *Node) CreateHigherLevel() *Node {
+	node := NewNode(n.timestamp, "", n.isTail)
+	node.level = n.level + 1
+	node.down = n
+	n.up = node
+	node.nodeHash = Rehash(n.nodeHash)
+	return node
+}
+
+func (n *Node) FillMerkleHash() {
+	var bucket []*Node
+	node := n.down
+	bucket = append(bucket, node)
+
+	for node.left != nil {
+		if node.left.IsBoundary() {
+			break
+		}
+		node = node.left
+		bucket = append(bucket, node)
+	}
+
+	for _, node := range bucket {
+		if node.merkleHash == "" {
+			node.FillMerkleHash()
+		}
+	}
+
+	slices.Reverse(bucket)
+	n.merkleHash = BucketHash(bucket)
+}
+
+const BoundaryThreshold = 7
+
+func IsBoundaryHash(hash string) bool {
+	digit := hash[:1]
+	assert(len(digit) == 1, "hash must be a single digit")
+	hashInt, _ := strconv.ParseInt(digit, 16, 64)
+	return hashInt < BoundaryThreshold
+}
+
+func BucketHash(nodes []*Node) string {
+	var sb strings.Builder
+	for _, node := range nodes {
+		sb.WriteString(node.merkleHash)
+	}
+	return Rehash(sb.String())
+}
+
+func assert(cond bool, msg string) {
+	if !cond {
+		panic(msg)
+	}
+}
+
+// ----------------------------------------------------------------
+
 // func (this *Tree) GetNode(level int8, key []byte) (*Node, error) {
 // 	entry_key := EncodeKey(level, key)
 // 	value, err := this.kv.Get(entry_key)
@@ -124,14 +233,14 @@ func LinkNodes(nodes []*Node) []*Node {
 
 // type Iter func(cb func(key []byte, value []byte) error) error
 
-func sortedKeys(m map[string]string) []string {
-	keys := make([]string, 0, len(m))
-	for key := range m {
-		keys = append(keys, key)
-	}
-	sort.Strings(keys)
-	return keys
-}
+// func sortedKeys(m map[string]string) []string {
+// 	keys := make([]string, 0, len(m))
+// 	for key := range m {
+// 		keys = append(keys, key)
+// 	}
+// 	sort.Strings(keys)
+// 	return keys
+// }
 
 // func (this *Tree) Build(m map[string]string) error {
 // 	keys := sortedKeys(m)
