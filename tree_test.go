@@ -25,7 +25,7 @@ import (
 func generate() []*Message {
 	m := []*Message{}
 	n := 1000
-	for i := 0; i < n; i++ {
+	for i := range n {
 		data := fmt.Sprintf("value %d", i)
 		m = append(m, &Message{timestamp: i, data: data})
 	}
@@ -33,7 +33,6 @@ func generate() []*Message {
 }
 
 func TestBuild(t *testing.T) {
-
 	messages := generate()
 	kv := NewKVFile()
 	kv.MustReset()
