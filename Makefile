@@ -14,3 +14,8 @@ test:
 
 run:
 	go run cmd/prollykv/main.go
+
+dot: $(patsubst %.dot,%.dot.png,$(wildcard *.dot))
+
+%.dot.png: %.dot
+	dot -Tpng $< -o $@

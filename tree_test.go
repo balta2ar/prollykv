@@ -22,9 +22,9 @@ import (
 // 	}
 // }
 
-func generate() []*Message {
+func generate(n int) []*Message {
 	m := []*Message{}
-	n := 1000
+	// n := 1000
 	for i := range n {
 		data := fmt.Sprintf("value %d", i)
 		m = append(m, &Message{timestamp: i, data: data})
@@ -33,10 +33,29 @@ func generate() []*Message {
 }
 
 func TestBuild(t *testing.T) {
-	messages := generate()
+	messages := generate(10)
 	kv := NewKVFile()
 	kv.MustReset()
-	tree := NewTree(kv, messages)
+	tree := NewTree(messages)
 	fmt.Println(tree)
+	// mustNil(tree.Build(files))
+}
+
+func TestDiff(t *testing.T) {
+	{
+		t1 := NewTree(generate(2))
+		t2 := NewTree(generate(3))
+		t1.Dot("t1.dot")
+		t2.Dot("t2.dot")
+		fmt.Println(t1)
+		fmt.Println(t2)
+		fmt.Println(Diff(t1, t2))
+	}
+	{
+		t1 := NewTree(generate(3))
+		t2 := NewTree(generate(2))
+		fmt.Println(Diff(t1, t2))
+	}
+	// fmt.Println(tree)
 	// mustNil(tree.Build(files))
 }

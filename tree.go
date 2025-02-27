@@ -5,6 +5,7 @@ import (
 	"encoding/binary"
 	"encoding/hex"
 	"fmt"
+	"os"
 	"slices"
 	"sort"
 	"strconv"
@@ -21,17 +22,18 @@ func NewMessage(timestamp int, data string) *Message {
 }
 
 type Tree struct {
-	kv KV
+	// kv KV
 	// cursor
 	// encoder
 	levels []*Level
 }
 
-func NewTree(kv KV, messages []*Message) *Tree {
-	tree := &Tree{
-		kv: kv,
-	}
+func (t *Tree) Root() *Node {
+	return t.levels[len(t.levels)-1].tail
+}
 
+func NewTree(messages []*Message) *Tree {
+	tree := &Tree{}
 	base := BaseLevel(messages)
 	tree.levels = append(tree.levels, base)
 	for !base.OnlyTail() {
@@ -39,6 +41,87 @@ func NewTree(kv KV, messages []*Message) *Tree {
 		tree.levels = append(tree.levels, base)
 	}
 	return tree
+}
+
+func (t *Tree) Dot(filename string) {
+	f, err := os.Create(filename)
+	if err != nil {
+		panic(err)
+	}
+	defer f.Close()
+
+	fmt.Fprintln(f, "digraph {")
+	fmt.Fprintln(f, "  node [shape=box];")
+	fmt.Fprintln(f, "  rankdir=LR;")
+
+	// Map to store node IDs to avoid duplicates
+	visited := make(map[*Node]bool)
+
+	// Generate unique node IDs
+	nodeID := func(n *Node) string {
+		if n == nil {
+			return "nil"
+		}
+		return fmt.Sprintf("n%p", n)
+	}
+
+	// Write a node to the DOT file
+	writeNode := func(n *Node) {
+		if n == nil || visited[n] {
+			return
+		}
+		visited[n] = true
+
+		// Node definition
+		label := fmt.Sprintf("ts:%d\\nlvl:%d", n.timestamp, n.level)
+		if n.isTail {
+			label += "\\nTAIL"
+		}
+		if n.IsBoundary() {
+			label += "\\nBOUNDARY"
+		}
+		fmt.Fprintf(f, "  %s [label=\"%s\"];\n", nodeID(n), label)
+
+		// Edge definitions
+		if n.left != nil {
+			fmt.Fprintf(f, "  %s -> %s [color=blue, label=\"left\"];\n", nodeID(n), nodeID(n.left))
+		}
+		if n.right != nil {
+			fmt.Fprintf(f, "  %s -> %s [color=green, label=\"right\"];\n", nodeID(n), nodeID(n.right))
+		}
+		if n.up != nil {
+			fmt.Fprintf(f, "  %s -> %s [color=red, label=\"up\"];\n", nodeID(n), nodeID(n.up))
+		}
+		if n.down != nil {
+			fmt.Fprintf(f, "  %s -> %s [color=purple, label=\"down\"];\n", nodeID(n), nodeID(n.down))
+		}
+	}
+
+	// Traverse the tree and write all nodes
+	for _, level := range t.levels {
+		for node := level.tail; node != nil; node = node.left {
+			writeNode(node)
+		}
+	}
+
+	// Create a subgraph for each level to ensure proper visual hierarchy
+	for i, level := range t.levels {
+		fmt.Fprintf(f, "  subgraph cluster_level_%d {\n", i)
+		fmt.Fprintf(f, "    label=\"Level %d\";\n", level.level)
+		fmt.Fprintf(f, "    rank=same;\n")
+
+		for node := level.tail; node != nil; node = node.left {
+			fmt.Fprintf(f, "    %s;\n", nodeID(node))
+		}
+		fmt.Fprintln(f, "  }")
+	}
+
+	// Add nil node if needed (for edges pointing to nil)
+	if len(visited) > 0 {
+		fmt.Fprintln(f, "  nil [shape=point];")
+	}
+
+	fmt.Fprintln(f, "}")
 }
 
 func (t *Tree) String() string {
@@ -74,7 +157,14 @@ func (l *Level) AsList() []*Node {
 }
 
 func (l *Level) String() string {
-	return fmt.Sprintf("Level(level=%d, size=%d)", l.level, l.size)
+	xs := []string{"tail"}
+	for t := l.tail; t != nil; t = t.left {
+		xs = append(xs, fmt.Sprintf("%d", t.timestamp))
+	}
+	xs = append(xs, "nil")
+	slices.Reverse(xs)
+	ts := strings.Join(xs, " < ")
+	return fmt.Sprintf("Level(level=%d, size=%d, %s)", l.level, l.size, ts)
 }
 
 func BaseLevel(messages []*Message) *Level {
@@ -164,6 +254,25 @@ func NewNode(timestamp int, data string, isTail bool) *Node {
 	return node
 }
 
+func (n *Node) String() string {
+	return fmt.Sprintf("Node(timestamp=%d, level=%d)", n.timestamp, n.level)
+}
+
+func (n *Node) Bottom() *Node {
+	for ; n.down != nil; n = n.down {
+	}
+	return n
+}
+
+func (n *Node) UntilBoundary(cb func(*Node)) {
+	for p := n; p != nil; p = p.left {
+		if p.IsBoundary() {
+			break
+		}
+		cb(p)
+	}
+}
+
 func (n *Node) IsBoundary() bool {
 	if n.boundary != nil {
 		return *n.boundary
@@ -250,6 +359,91 @@ func assert(cond bool, msg string) {
 }
 
 // ----------------------------------------------------------------
+
+func GetNonBoundaryNodes(nodes []*Node) []*Node {
+	var out []*Node
+	for _, n := range nodes {
+		if n.down == nil {
+			continue
+		}
+		n.down.UntilBoundary(func(p *Node) {
+			out = append(out, p)
+		})
+	}
+	slices.Reverse(out)
+	return out
+}
+
+func GetNonBoundaryNodesForLevel0(nodes []*Node) []*Node {
+	var out []*Node
+	for _, n := range nodes {
+		n.Bottom().UntilBoundary(func(p *Node) {
+			out = append(out, p)
+		})
+	}
+	slices.Reverse(nodes)
+	return out
+}
+
+type Delta struct {
+	key    int    // timestamp
+	typ    string // "add", "remove", "update"
+	source string
+	target string
+}
+
+func Diff(source, target *Tree) []Delta {
+	var out []Delta
+	nodes1 := []*Node{source.Root()}
+	nodes2 := []*Node{target.Root()}
+
+	var diffAtLevel func(nodes1, nodes2 []*Node, level int8)
+	diffAtLevel = func(nodes1, nodes2 []*Node, level int8) {
+		if level < 0 {
+			return
+		}
+		moreNodes1 := []*Node{}
+		moreNodes2 := []*Node{}
+		p1, p2 := nodes1[len(nodes1)-1], nodes2[len(nodes2)-1]
+		for p1 != nil && p2 != nil {
+			if p1.timestamp == p2.timestamp { // might be update
+				fmt.Println("p1 == p2", p1, p2)
+				if p1.merkleHash != p2.merkleHash {
+					moreNodes1 = append(moreNodes1, p1)
+					moreNodes2 = append(moreNodes2, p2)
+				}
+				p1, p2 = p1.left, p2.left
+			} else if p1.timestamp < p2.timestamp { // add
+				fmt.Println("p1 < p2", p1, p2)
+				// source: p1=1        3
+				// target:    1  p2=2  3
+				if p2.level == 0 {
+					out = append(out, Delta{key: p2.timestamp, typ: "add", source: "", target: p2.data})
+				}
+				moreNodes2 = append(moreNodes2, p2)
+				p2 = p2.left
+			} else { // p1.timestamp > p2.timestamp, remove
+				fmt.Println("p1 > p2", p1, p2)
+				// source:    1  p1=2  3
+				// target: p2=1        3
+				p1 = p1.left // keys are gone, we skip them (reverse run will catch them)
+			}
+		}
+
+		nodes1 = GetNonBoundaryNodes(moreNodes1)
+		nodes2 = GetNonBoundaryNodes(moreNodes2)
+		if len(nodes1) == 0 && len(nodes2) == 0 {
+			return
+		} else if len(nodes1) == 0 { // add everything from the target
+			for _, p2 := range GetNonBoundaryNodesForLevel0(nodes2) {
+				out = append(out, Delta{key: p2.timestamp, typ: "add", source: "", target: p2.data})
+			}
+		}
+		diffAtLevel(nodes1, nodes2, level-1)
+	}
+	diffAtLevel(nodes1, nodes2, source.Root().level)
+	return out
+}
 
 // func (this *Tree) GetNode(level int8, key []byte) (*Node, error) {
 // 	entry_key := EncodeKey(level, key)
