@@ -43,19 +43,21 @@ func TestBuild(t *testing.T) {
 
 func TestDiff(t *testing.T) {
 	{
-		t1 := NewTree(generate(2))
-		t2 := NewTree(generate(3))
+		all := generate(10)
+		t1 := NewTree(all[:4])
+		t2 := NewTree(all[1:3])
 		t1.Dot("t1.dot")
 		t2.Dot("t2.dot")
-		fmt.Println(t1)
 		fmt.Println(t2)
-		fmt.Println(Diff(t1, t2))
+		fmt.Println(t1)
+		// fmt.Println(Diff(t1, t2))
+		fmt.Println(Diff(t2, t1))
 	}
-	{
-		t1 := NewTree(generate(3))
-		t2 := NewTree(generate(2))
-		fmt.Println(Diff(t1, t2))
-	}
+	// {
+	// 	t1 := NewTree(generate(3))
+	// 	t2 := NewTree(generate(2))
+	// 	fmt.Println(Diff(t1, t2))
+	// }
 	// fmt.Println(tree)
 	// mustNil(tree.Build(files))
 }

@@ -29,7 +29,7 @@ type Tree struct {
 }
 
 func (t *Tree) Root() *Node {
-	return t.levels[len(t.levels)-1].tail
+	return t.levels[len(t.levels)-1].tail.down.left
 }
 
 func NewTree(messages []*Message) *Tree {
@@ -159,7 +159,11 @@ func (l *Level) AsList() []*Node {
 func (l *Level) String() string {
 	xs := []string{"tail"}
 	for t := l.tail; t != nil; t = t.left {
-		xs = append(xs, fmt.Sprintf("%d", t.timestamp))
+		s := fmt.Sprintf("%d", t.timestamp)
+		if t.IsBoundary() {
+			s += "*"
+		}
+		xs = append(xs, s)
 	}
 	xs = append(xs, "nil")
 	slices.Reverse(xs)
@@ -258,6 +262,13 @@ func (n *Node) String() string {
 	return fmt.Sprintf("Node(timestamp=%d, level=%d)", n.timestamp, n.level)
 }
 
+func (n *Node) Descend(o *Node) *Node {
+	var p = n
+	for ; p.level > o.level; p = p.down {
+	}
+	return p
+}
+
 func (n *Node) Bottom() *Node {
 	for ; n.down != nil; n = n.down {
 	}
@@ -266,10 +277,10 @@ func (n *Node) Bottom() *Node {
 
 func (n *Node) UntilBoundary(cb func(*Node)) {
 	for p := n; p != nil; p = p.left {
+		cb(p)
 		if p.IsBoundary() {
 			break
 		}
-		cb(p)
 	}
 }
 
@@ -363,10 +374,12 @@ func assert(cond bool, msg string) {
 func GetNonBoundaryNodes(nodes []*Node) []*Node {
 	var out []*Node
 	for _, n := range nodes {
+		fmt.Println("n.down ", n.down)
 		if n.down == nil {
 			continue
 		}
 		n.down.UntilBoundary(func(p *Node) {
+			fmt.Println("adding p", p)
 			out = append(out, p)
 		})
 	}
@@ -394,54 +407,97 @@ type Delta struct {
 
 func Diff(source, target *Tree) []Delta {
 	var out []Delta
-	nodes1 := []*Node{source.Root()}
-	nodes2 := []*Node{target.Root()}
+	s, t := source.Root().Descend(target.Root()), target.Root().Descend(source.Root())
+	assert(s.level == t.level, "levels must match")
+	nodes1 := []*Node{s}
+	nodes2 := []*Node{t}
+	fmt.Println("nodes1", nodes1)
+	fmt.Println("nodes2", nodes2)
+
+	left := func(n *Node, xs []*Node) (*Node, []*Node) {
+		if n != nil {
+			n = n.left
+		}
+		k := len(xs)
+		if n == nil && k > 0 {
+			n = xs[k-1]
+			xs = xs[:k-1]
+		}
+		return n, xs
+	}
 
 	var diffAtLevel func(nodes1, nodes2 []*Node, level int8)
 	diffAtLevel = func(nodes1, nodes2 []*Node, level int8) {
 		if level < 0 {
 			return
 		}
+		fmt.Println("diffAtLevel", level)
+		fmt.Println("starting with nodes1", nodes1)
+		fmt.Println("starting with nodes2", nodes2)
 		moreNodes1 := []*Node{}
 		moreNodes2 := []*Node{}
-		p1, p2 := nodes1[len(nodes1)-1], nodes2[len(nodes2)-1]
+		// i1, i2 := len(nodes1)-1, len(nodes2)-1
+		// for i1 >= 0 && i2 >= 0 {
+		// p1, p2 := nodes1[i1], nodes2[i2]
+		p1, nodes1 := left(nil, nodes1)
+		p2, nodes2 := left(nil, nodes2)
+
 		for p1 != nil && p2 != nil {
+			// p1, p2 := nodes1[i1], nodes2[i2]
 			if p1.timestamp == p2.timestamp { // might be update
-				fmt.Println("p1 == p2", p1, p2)
+				fmt.Println("! p1 == p2 [could be update]", p1, p2)
 				if p1.merkleHash != p2.merkleHash {
+					fmt.Println("queing for expansion both", p1, p2)
 					moreNodes1 = append(moreNodes1, p1)
 					moreNodes2 = append(moreNodes2, p2)
 				}
-				p1, p2 = p1.left, p2.left
+				// p1, p2 = p1.left, p2.left
+				// i1, i2 = i1-1, i2-1
+				p1, nodes1 = left(p1, nodes1)
+				p2, nodes2 = left(p2, nodes2)
 			} else if p1.timestamp < p2.timestamp { // add
-				fmt.Println("p1 < p2", p1, p2)
+				fmt.Println("! p1 < p2 (add p2)", p2)
 				// source: p1=1        3
 				// target:    1  p2=2  3
 				if p2.level == 0 {
+					fmt.Println("add p2", p2)
 					out = append(out, Delta{key: p2.timestamp, typ: "add", source: "", target: p2.data})
 				}
+				fmt.Println("queing for expansion p2", p2)
 				moreNodes2 = append(moreNodes2, p2)
-				p2 = p2.left
+				// p2 = p2.left
+				// i2 = i2 - 1
+				p2, nodes2 = left(p2, nodes2)
 			} else { // p1.timestamp > p2.timestamp, remove
-				fmt.Println("p1 > p2", p1, p2)
+				fmt.Println("! p1 > p2 (remove p1)", p1)
 				// source:    1  p1=2  3
 				// target: p2=1        3
-				p1 = p1.left // keys are gone, we skip them (reverse run will catch them)
+				// p1 = p1.left // keys are gone, we skip them (reverse run will catch them)
+				// i1 = i1 - 1
+				p1, nodes1 = left(p1, nodes1)
 			}
 		}
 
+		for ; p2 != nil; p2, nodes2 = left(p2, nodes2) {
+			fmt.Println("leftover p2", p2)
+			moreNodes2 = append(moreNodes2, p2)
+		}
 		nodes1 = GetNonBoundaryNodes(moreNodes1)
 		nodes2 = GetNonBoundaryNodes(moreNodes2)
+		fmt.Println("expanded nodes1", nodes1)
+		fmt.Println("expanded nodes2", nodes2)
 		if len(nodes1) == 0 && len(nodes2) == 0 {
+			fmt.Println("no more nodes")
 			return
 		} else if len(nodes1) == 0 { // add everything from the target
+			fmt.Println("add everything from the target")
 			for _, p2 := range GetNonBoundaryNodesForLevel0(nodes2) {
 				out = append(out, Delta{key: p2.timestamp, typ: "add", source: "", target: p2.data})
 			}
 		}
 		diffAtLevel(nodes1, nodes2, level-1)
 	}
-	diffAtLevel(nodes1, nodes2, source.Root().level)
+	diffAtLevel(nodes1, nodes2, s.level)
 	return out
 }
 
