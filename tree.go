@@ -44,81 +44,166 @@ func NewTree(messages []*Message) *Tree {
 }
 
 func (t *Tree) Dot(filename string) {
+	// Run with: neato -Tpng -o tree.png tree.dot
 	f, err := os.Create(filename)
 	if err != nil {
 		panic(err)
 	}
 	defer f.Close()
 
-	fmt.Fprintln(f, "digraph {")
-	fmt.Fprintln(f, "  node [shape=box];")
-	fmt.Fprintln(f, "  rankdir=LR;")
+	fmt.Fprintln(f, "digraph G {")
+	fmt.Fprintln(f, "  layout=neato;")
+	fmt.Fprintln(f, "  node [shape=box, fontname=\"Arial\"];")
+	fmt.Fprintln(f, "  edge [fontsize=10, fontname=\"Arial\"];")
 
-	// Map to store node IDs to avoid duplicates
-	visited := make(map[*Node]bool)
-
-	// Generate unique node IDs
+	// Helper function to generate unique node IDs
 	nodeID := func(n *Node) string {
-		if n == nil {
-			return "nil"
-		}
-		return fmt.Sprintf("n%p", n)
+		return fmt.Sprintf("node_%p", n)
 	}
 
-	// Write a node to the DOT file
-	writeNode := func(n *Node) {
-		if n == nil || visited[n] {
-			return
-		}
-		visited[n] = true
+	// Map to store all nodes
+	allNodes := make(map[*Node]bool)
 
-		// Node definition
-		label := fmt.Sprintf("ts:%d\\nlvl:%d", n.timestamp, n.level)
-		if n.isTail {
-			label += "\\nTAIL"
-		}
-		if n.IsBoundary() {
-			label += "\\nBOUNDARY"
-		}
-		fmt.Fprintf(f, "  %s [label=\"%s\"];\n", nodeID(n), label)
+	// First pass: collect all nodes and calculate positions
+	// Calculate node positions - right to left, bottom to top
+	const (
+		nodeWidth  = 2.0
+		nodeHeight = 1.5
+		xSpacing   = 3.0
+		ySpacing   = 3.0
+	)
 
-		// Edge definitions
-		if n.left != nil {
-			fmt.Fprintf(f, "  %s -> %s [color=blue, label=\"left\"];\n", nodeID(n), nodeID(n.left))
-		}
-		if n.right != nil {
-			fmt.Fprintf(f, "  %s -> %s [color=green, label=\"right\"];\n", nodeID(n), nodeID(n.right))
-		}
-		if n.up != nil {
-			fmt.Fprintf(f, "  %s -> %s [color=red, label=\"up\"];\n", nodeID(n), nodeID(n.up))
-		}
-		if n.down != nil {
-			fmt.Fprintf(f, "  %s -> %s [color=purple, label=\"down\"];\n", nodeID(n), nodeID(n.down))
-		}
-	}
+	// Build position map
+	nodePositions := make(map[*Node]struct{ x, y float64 })
 
-	// Traverse the tree and write all nodes
-	for _, level := range t.levels {
-		for node := level.tail; node != nil; node = node.left {
-			writeNode(node)
+	for levelIdx, level := range t.levels {
+		y := float64(levelIdx) * ySpacing
+
+		// Collect nodes at this level
+		var nodesAtLevel []*Node
+		for n := level.tail; n != nil; n = n.left {
+			nodesAtLevel = append(nodesAtLevel, n)
+			allNodes[n] = true
+		}
+
+		// Position nodes from right to left
+		for i, node := range nodesAtLevel {
+			x := float64(len(nodesAtLevel)-1-i) * xSpacing
+
+			// Align nodes vertically with their up/down connections
+			if node.down != nil && nodePositions[node.down].x != 0 {
+				// Position above its down node
+				x = nodePositions[node.down].x
+			}
+
+			nodePositions[node] = struct{ x, y float64 }{x, y}
 		}
 	}
 
-	// Create a subgraph for each level to ensure proper visual hierarchy
+	// Second pass: ensure vertical alignment of nodes with up/down connections
+	// Apply fixes for vertical alignment
+	for node := range allNodes {
+		if node.up != nil {
+			upPos := nodePositions[node.up]
+			nodePos := nodePositions[node]
+			// Align the x positions
+			if upPos.x != nodePos.x {
+				nodePositions[node.up] = struct{ x, y float64 }{nodePos.x, upPos.y}
+			}
+		}
+	}
+
+	// Third pass: output nodes with calculated positions
+	for node := range allNodes {
+		pos := nodePositions[node]
+
+		// Determine node type
+		nodeType := "Regular"
+		if node.isTail {
+			nodeType = "Tail"
+		} else if node.IsBoundary() {
+			nodeType = "Boundary"
+		}
+
+		// Truncate merkleHash for cleaner display
+		shortHash := node.merkleHash
+		if len(shortHash) > 4 {
+			shortHash = shortHash[:4]
+		}
+
+		// Create node label with all relevant information
+		label := fmt.Sprintf("ts: %d\\nMHash: %s\\ntype: %s\\nlevel: %d",
+			node.timestamp, shortHash, nodeType, node.level)
+
+		// Style nodes based on type
+		fillcolor := "white"
+		if node.isTail {
+			fillcolor = "lightblue"
+		} else if node.IsBoundary() {
+			fillcolor = "lightgreen"
+		}
+
+		// Output node with absolute position
+		fmt.Fprintf(f, "  %s [label=\"%s\", style=\"filled\", fillcolor=\"%s\", pos=\"%f,%f!\"];\n",
+			nodeID(node), label, fillcolor, pos.x, pos.y)
+	}
+
+	// Output edges
+	// Down/up edges (vertical connections)
+	for node := range allNodes {
+		if node.down != nil {
+			fmt.Fprintf(f, "  %s -> %s [color=\"purple\", label=\"down\", weight=10];\n",
+				nodeID(node), nodeID(node.down))
+		}
+		if node.up != nil {
+			fmt.Fprintf(f, "  %s -> %s [color=\"red\", label=\"up\", weight=10];\n",
+				nodeID(node), nodeID(node.up))
+		}
+	}
+
+	// Left/right edges (horizontal connections)
+	for node := range allNodes {
+		if node.left != nil {
+			fmt.Fprintf(f, "  %s -> %s [color=\"blue\", label=\"left\", weight=1];\n",
+				nodeID(node), nodeID(node.left))
+		}
+		if node.right != nil {
+			fmt.Fprintf(f, "  %s -> %s [color=\"green\", label=\"right\", weight=1];\n",
+				nodeID(node), nodeID(node.right))
+		}
+	}
+
+	// Create a special nil node for showing dangling pointers
+	fmt.Fprintln(f, "  nil [shape=point, width=0.2, label=\"\", pos=\"-2,-2!\"];")
+
+	// Connect dangling pointers to the nil node
+	for node := range allNodes {
+		if node.left == nil && !node.isTail {
+			fmt.Fprintf(f, "  %s -> nil [color=\"blue\", style=dotted, label=\"left\"];\n", nodeID(node))
+		}
+		if node.right == nil && node != t.levels[node.level].tail {
+			fmt.Fprintf(f, "  %s -> nil [color=\"green\", style=dotted, label=\"right\"];\n", nodeID(node))
+		}
+		if node.up == nil && node.level != int8(len(t.levels)-1) {
+			fmt.Fprintf(f, "  %s -> nil [color=\"red\", style=dotted, label=\"up\"];\n", nodeID(node))
+		}
+		if node.down == nil && node.level != 0 {
+			fmt.Fprintf(f, "  %s -> nil [color=\"purple\", style=dotted, label=\"down\"];\n", nodeID(node))
+		}
+	}
+
+	// Add invisible subgraphs for each level to help with visualization
 	for i, level := range t.levels {
 		fmt.Fprintf(f, "  subgraph cluster_level_%d {\n", i)
 		fmt.Fprintf(f, "    label=\"Level %d\";\n", level.level)
-		fmt.Fprintf(f, "    rank=same;\n")
+		fmt.Fprintln(f, "    style=invis;")
 
-		for node := level.tail; node != nil; node = node.left {
-			fmt.Fprintf(f, "    %s;\n", nodeID(node))
+		// Add all nodes in this level to the subgraph
+		for n := level.tail; n != nil; n = n.left {
+			fmt.Fprintf(f, "    %s;\n", nodeID(n))
 		}
-		fmt.Fprintln(f, "  }")
-	}
 
-	// Add nil node if needed (for edges pointing to nil)
-	if len(visited) > 0 {
-		fmt.Fprintln(f, "  nil [shape=point];")
+		fmt.Fprintln(f, "  }")
 	}
 
 	fmt.Fprintln(f, "}")

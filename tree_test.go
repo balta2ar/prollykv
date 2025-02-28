@@ -43,7 +43,7 @@ func TestBuild(t *testing.T) {
 
 func TestDiff(t *testing.T) {
 	{
-		all := generate(10)
+		all := generate(20)
 		t := NewTree(all)
 		t.Dot("all.dot")
 		t1 := NewTree(all[:4])

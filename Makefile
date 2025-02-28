@@ -18,4 +18,4 @@ run:
 dot: $(patsubst %.dot,%.dot.png,$(wildcard *.dot))
 
 %.dot.png: %.dot
-	dot -Tpng $< -o $@
+	dot -Kneato -Tpng $< -o $@
