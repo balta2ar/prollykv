@@ -379,7 +379,6 @@ func GetNonBoundaryNodes(nodes []*Node) []*Node {
 			continue
 		}
 		n.down.UntilBoundary(func(p *Node) {
-			fmt.Println("adding p", p)
 			out = append(out, p)
 		})
 	}
@@ -405,29 +404,53 @@ type Delta struct {
 	target string
 }
 
+type Chain struct {
+	nodes []*Node
+	p     *Node
+}
+
+func NewChain(nodes ...*Node) *Chain {
+	c := &Chain{nodes: nodes}
+	c.Left()
+	return c
+}
+
+func (c *Chain) Append(n *Node)  { c.nodes = append(c.nodes, n) }
+func (c *Chain) Reverse() *Chain { slices.Reverse(c.nodes); return c }
+func (c *Chain) More() bool      { return c.Current() != nil }
+func (c *Chain) Current() *Node  { return c.p }
+func (c *Chain) Left() *Node {
+	if c.p != nil {
+		c.p = c.p.left
+	}
+	if c.p == nil {
+		k := len(c.nodes)
+		if k > 0 {
+			c.p = c.nodes[k-1]
+			c.nodes = c.nodes[:k-1]
+		}
+	}
+	return c.p
+}
+func (c *Chain) Nodes() []*Node {
+	var out []*Node
+	for n := c.Current(); n != nil; n = c.Left() {
+		out = append(out, n)
+	}
+	return out
+}
+
 func Diff(source, target *Tree) []Delta {
 	var out []Delta
 	s, t := source.Root().Descend(target.Root()), target.Root().Descend(source.Root())
 	assert(s.level == t.level, "levels must match")
-	nodes1 := []*Node{s}
-	nodes2 := []*Node{t}
+	nodes1 := NewChain(s)
+	nodes2 := NewChain(t)
 	fmt.Println("nodes1", nodes1)
 	fmt.Println("nodes2", nodes2)
 
-	left := func(n *Node, xs []*Node) (*Node, []*Node) {
-		if n != nil {
-			n = n.left
-		}
-		k := len(xs)
-		if n == nil && k > 0 {
-			n = xs[k-1]
-			xs = xs[:k-1]
-		}
-		return n, xs
-	}
-
-	var diffAtLevel func(nodes1, nodes2 []*Node, level int8)
-	diffAtLevel = func(nodes1, nodes2 []*Node, level int8) {
+	var diffAtLevel func(nodes1, nodes2 *Chain, level int8)
+	diffAtLevel = func(nodes1, nodes2 *Chain, level int8) {
 		if level < 0 {
 			return
 		}
@@ -436,14 +459,18 @@ func Diff(source, target *Tree) []Delta {
 		fmt.Println("starting with nodes2", nodes2)
 		moreNodes1 := []*Node{}
 		moreNodes2 := []*Node{}
-		// i1, i2 := len(nodes1)-1, len(nodes2)-1
-		// for i1 >= 0 && i2 >= 0 {
-		// p1, p2 := nodes1[i1], nodes2[i2]
-		p1, nodes1 := left(nil, nodes1)
-		p2, nodes2 := left(nil, nodes2)
 
-		for p1 != nil && p2 != nil {
-			// p1, p2 := nodes1[i1], nodes2[i2]
+		addP2 := func(p2 *Node) {
+			if p2.level == 0 {
+				fmt.Println("OUT p2", p2)
+				out = append(out, Delta{key: p2.timestamp, typ: "add", source: "", target: p2.data})
+			} else {
+				moreNodes2 = append(moreNodes2, p2)
+			}
+		}
+
+		for nodes1.More() && nodes2.More() {
+			p1, p2 := nodes1.Current(), nodes2.Current()
 			if p1.timestamp == p2.timestamp { // might be update
 				fmt.Println("! p1 == p2 [could be update]", p1, p2)
 				if p1.merkleHash != p2.merkleHash {
@@ -451,47 +478,39 @@ func Diff(source, target *Tree) []Delta {
 					moreNodes1 = append(moreNodes1, p1)
 					moreNodes2 = append(moreNodes2, p2)
 				}
-				// p1, p2 = p1.left, p2.left
-				// i1, i2 = i1-1, i2-1
-				p1, nodes1 = left(p1, nodes1)
-				p2, nodes2 = left(p2, nodes2)
+				nodes1.Left()
+				nodes2.Left()
 			} else if p1.timestamp < p2.timestamp { // add
 				fmt.Println("! p1 < p2 (add p2)", p2)
 				// source: p1=1        3
 				// target:    1  p2=2  3
-				if p2.level == 0 {
-					fmt.Println("add p2", p2)
-					out = append(out, Delta{key: p2.timestamp, typ: "add", source: "", target: p2.data})
-				}
-				fmt.Println("queing for expansion p2", p2)
-				moreNodes2 = append(moreNodes2, p2)
-				// p2 = p2.left
-				// i2 = i2 - 1
-				p2, nodes2 = left(p2, nodes2)
+				addP2(p2)
+				nodes2.Left()
 			} else { // p1.timestamp > p2.timestamp, remove
 				fmt.Println("! p1 > p2 (remove p1)", p1)
 				// source:    1  p1=2  3
 				// target: p2=1        3
-				// p1 = p1.left // keys are gone, we skip them (reverse run will catch them)
-				// i1 = i1 - 1
-				p1, nodes1 = left(p1, nodes1)
+				nodes1.Left() // keys are gone, we skip them (reverse run will catch them)
 			}
 		}
 
-		for ; p2 != nil; p2, nodes2 = left(p2, nodes2) {
-			fmt.Println("leftover p2", p2)
-			moreNodes2 = append(moreNodes2, p2)
+		// for ; p2 != nil; p2, nodes2 = left(p2, nodes2) {
+		// 	fmt.Println("leftover p2", p2)
+		// 	moreNodes2 = append(moreNodes2, p2)
+		// }
+		for _, p2 := range nodes2.Nodes() {
+			addP2(p2)
 		}
-		nodes1 = GetNonBoundaryNodes(moreNodes1)
-		nodes2 = GetNonBoundaryNodes(moreNodes2)
+		nodes1 = NewChain(GetNonBoundaryNodes(moreNodes1)...)
+		nodes2 = NewChain(GetNonBoundaryNodes(moreNodes2)...)
 		fmt.Println("expanded nodes1", nodes1)
 		fmt.Println("expanded nodes2", nodes2)
-		if len(nodes1) == 0 && len(nodes2) == 0 {
+		if !nodes1.More() && !nodes2.More() {
 			fmt.Println("no more nodes")
 			return
-		} else if len(nodes1) == 0 { // add everything from the target
-			fmt.Println("add everything from the target")
-			for _, p2 := range GetNonBoundaryNodesForLevel0(nodes2) {
+		} else if !nodes1.More() { // add everything from the target
+			fmt.Println("OUT everything from the target")
+			for _, p2 := range GetNonBoundaryNodesForLevel0(nodes2.Nodes()) {
 				out = append(out, Delta{key: p2.timestamp, typ: "add", source: "", target: p2.data})
 			}
 		}
