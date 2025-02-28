@@ -44,7 +44,7 @@ func NewTree(messages []*Message) *Tree {
 }
 
 func (t *Tree) Dot(filename string) {
-	// Run with: neato -Tpng -o tree.png tree.dot
+	// Run: dot -Kneato -Tpng -o tree.png tree.dot
 	f, err := os.Create(filename)
 	if err != nil {
 		panic(err)
@@ -170,25 +170,6 @@ func (t *Tree) Dot(filename string) {
 		if node.right != nil {
 			fmt.Fprintf(f, "  %s -> %s [color=\"green\", label=\"right\", weight=1];\n",
 				nodeID(node), nodeID(node.right))
-		}
-	}
-
-	// Create a special nil node for showing dangling pointers
-	fmt.Fprintln(f, "  nil [shape=point, width=0.2, label=\"\", pos=\"-2,-2!\"];")
-
-	// Connect dangling pointers to the nil node
-	for node := range allNodes {
-		if node.left == nil && !node.isTail {
-			fmt.Fprintf(f, "  %s -> nil [color=\"blue\", style=dotted, label=\"left\"];\n", nodeID(node))
-		}
-		if node.right == nil && node != t.levels[node.level].tail {
-			fmt.Fprintf(f, "  %s -> nil [color=\"green\", style=dotted, label=\"right\"];\n", nodeID(node))
-		}
-		if node.up == nil && node.level != int8(len(t.levels)-1) {
-			fmt.Fprintf(f, "  %s -> nil [color=\"red\", style=dotted, label=\"up\"];\n", nodeID(node))
-		}
-		if node.down == nil && node.level != 0 {
-			fmt.Fprintf(f, "  %s -> nil [color=\"purple\", style=dotted, label=\"down\"];\n", nodeID(node))
 		}
 	}
 
