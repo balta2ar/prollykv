@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"slices"
 	"testing"
 )
 
@@ -46,8 +47,8 @@ func TestDiff(t *testing.T) {
 		all := generate(20)
 		t := NewTree(all)
 		t.Dot("all.dot")
-		t1 := NewTree(all[:4])
-		t2 := NewTree(all[1:3])
+		t1 := NewTree(all)
+		t2 := NewTree(slices.Delete(slices.Delete(all, 3, 4), 14, 15))
 		t1.Dot("t1.dot")
 		t2.Dot("t2.dot")
 		fmt.Println(t2)

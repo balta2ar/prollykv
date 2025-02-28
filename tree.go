@@ -69,8 +69,8 @@ func (t *Tree) Dot(filename string) {
 	const (
 		nodeWidth  = 2.0
 		nodeHeight = 1.5
-		xSpacing   = 3.0
-		ySpacing   = 3.0
+		xSpacing   = 2.0
+		ySpacing   = 2.0
 	)
 
 	// Build position map
