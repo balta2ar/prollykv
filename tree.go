@@ -248,8 +248,7 @@ func BaseLevel(messages []*Message) *Level {
 		nodes = append(nodes, NewNode(m.timestamp, m.data, notTail))
 	}
 	const isTail = true
-	fakeTail := NewNode(-1, "tail", isTail)
-	nodes = append(nodes, fakeTail)
+	nodes = append(nodes, NewNode(-1, "tail", isTail))
 	level.tail = LinkNodes(nodes)[len(nodes)-1]
 	level.size = len(nodes)
 	return level
@@ -264,7 +263,7 @@ func NextLevel(prev *Level) *Level {
 		}
 	}
 	LinkNodes(eligible)
-	for _, n := range nodes {
+	for _, n := range eligible {
 		n.FillMerkleHash()
 	}
 	next := NewLevel(prev.level + 1)
@@ -324,7 +323,6 @@ func NewNode(timestamp int, data string, isTail bool) *Node {
 		isTail:     isTail,
 		merkleHash: hash,
 		boundary:   nil,
-		// nodeHash:   hash,
 	}
 	return node
 }
@@ -392,7 +390,7 @@ func (n *Node) CreateHigherLevel() *Node {
 	node.down = n
 	n.up = node
 	// node.nodeHash = Rehash(n.nodeHash)
-	node.merkleHash = Rehash(n.merkleHash)
+	node.merkleHash = "" // to be filled later
 	return node
 }
 
