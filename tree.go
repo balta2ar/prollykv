@@ -328,6 +328,28 @@ func (n *Node) String() string {
 	return fmt.Sprintf("Node(timestamp=%d, level=%d)", n.timestamp, n.level)
 }
 
+// -1 when left is less, 0 when equal, 1 when right is less
+func (n *Node) CompareKey(o *Node) int {
+	switch fmt.Sprintf("%t_%t", n.isTail, o.isTail) {
+	case "true_true":
+		return 0
+	case "true_false":
+		return 1
+	case "false_true":
+		return -1
+	case "false_false":
+		if n.timestamp < o.timestamp {
+			return -1
+		}
+		if n.timestamp > o.timestamp {
+			return 1
+		}
+		return 0
+	default:
+		panic("unreachable")
+	}
+}
+
 func (n *Node) Descend(o *Node) *Node {
 	var p = n
 	for ; p.level > o.level; p = p.down {
