@@ -29,7 +29,7 @@ type Tree struct {
 }
 
 func (t *Tree) Root() *Node {
-	return t.levels[len(t.levels)-1].tail.down.left
+	return t.levels[len(t.levels)-1].tail
 }
 
 func NewTree(messages []*Message) *Tree {
@@ -436,7 +436,7 @@ const BoundaryThresholdBits = 5
 
 func IsBoundaryHash2(hash string) bool {
 	digit := hash[:1]
-	assert(len(digit) == 1, "hash must be a single digit")
+	must(len(digit) == 1, "hash must be a single digit")
 	hashInt, _ := strconv.ParseInt(digit, 16, 64)
 	return hashInt < BoundaryThresholdBits
 }
@@ -457,7 +457,7 @@ func BucketHash(nodes []*Node) string {
 	return Rehash(sb.String())
 }
 
-func assert(cond bool, msg string) {
+func must(cond bool, msg string) {
 	if !cond {
 		panic(msg)
 	}
@@ -513,7 +513,12 @@ type LessEqual struct {
 
 var _ Iter = &LessEqual{}
 
-func (b *LessEqual) Current() *Node { return b.p }
+func (b *LessEqual) Current() *Node {
+	if b.p == nil {
+		return b.Left()
+	}
+	return b.p
+}
 func (b *LessEqual) Left() *Node {
 	if b.done {
 		return nil
@@ -521,7 +526,7 @@ func (b *LessEqual) Left() *Node {
 	b.p = b.Iter.Left()
 	if b.p == nil || b.p.timestamp <= b.Key {
 		b.done = true
-		return nil
+		b.p = nil
 	}
 	return b.p
 }
@@ -535,7 +540,12 @@ type Boundary struct {
 
 var _ Iter = &Boundary{}
 
-func (b *Boundary) Current() *Node { return b.p }
+func (b *Boundary) Current() *Node {
+	if b.p == nil {
+		return b.Left()
+	}
+	return b.p
+}
 func (b *Boundary) Left() *Node {
 	if b.done {
 		return nil
@@ -561,7 +571,6 @@ func NewChain(nodes ...Iter) *Chain {
 	return c
 }
 
-func (c *Chain) More() bool     { return c.Current() != nil }
 func (c *Chain) Current() *Node { return c.p }
 func (c *Chain) Left() *Node {
 	if c.p != nil {
@@ -587,80 +596,130 @@ func (c *Chain) Left() *Node {
 func Diff(source, target *Tree) []Delta {
 	var out []Delta
 	s, t := source.Root().Descend(target.Root()), target.Root().Descend(source.Root())
-	assert(s.level == t.level, "levels must match")
-	nodes1 := NewChain(s)
-	nodes2 := NewChain(t)
-	fmt.Println("nodes1", nodes1)
-	fmt.Println("nodes2", nodes2)
+	must(s.level == t.level, "levels must match")
 
-	var diffAtLevel func(nodes1, nodes2 *Chain, level int8)
-	diffAtLevel = func(nodes1, nodes2 *Chain, level int8) {
+	emitUpdate := func(p1, p2 *Node) {
+		out = append(out, Delta{key: p2.timestamp, typ: "update", source: p1.data, target: p2.data})
+	}
+	emitAdd := func(p2 *Node) {
+		out = append(out, Delta{key: p2.timestamp, typ: "add", source: "", target: p2.data})
+	}
+	emitAddSubtree := func(p2 Iter, limit *Node) {
+		if limit != nil {
+			p2 = &LessEqual{Iter: p2, Key: limit.timestamp}
+		}
+		for p := p2.Left(); p != nil; p = p2.Left() {
+			emitAdd(p)
+		}
+	}
+
+	var diffAtLevel func(nodes1, nodes2 Iter, level int8)
+	diffAtLevel = func(nodes1, nodes2 Iter, level int8) {
 		if level < 0 {
 			return
 		}
-		fmt.Println("diffAtLevel", level)
-		fmt.Println("starting with nodes1", nodes1)
-		fmt.Println("starting with nodes2", nodes2)
-		moreNodes1 := []*Node{}
-		moreNodes2 := []*Node{}
 
-		addP2 := func(p2 *Node) {
-			if p2.level == 0 {
-				fmt.Println("OUT p2", p2)
-				out = append(out, Delta{key: p2.timestamp, typ: "add", source: "", target: p2.data})
-			} else {
-				moreNodes2 = append(moreNodes2, p2)
-			}
-		}
+		moreNodes1 := []Iter{}
+		moreNodes2 := []Iter{}
 
-		for nodes1.More() && nodes2.More() {
-			p1, p2 := nodes1.Current(), nodes2.Current()
-			if p1.timestamp == p2.timestamp { // might be update
-				fmt.Println("! p1 == p2 [could be update]", p1, p2)
-				if p1.merkleHash != p2.merkleHash {
-					fmt.Println("queing for expansion both", p1, p2)
-					moreNodes1 = append(moreNodes1, p1)
-					moreNodes2 = append(moreNodes2, p2)
+		for l, r := nodes1.Current(), nodes2.Current(); l != nil && r != nil; {
+			switch l.CompareKey(r) {
+			case -1: // l < r
+				// the whole r subtree is missing -- everything on level0 should
+				// be added until the r.Left().key (excluding)
+				// NOT SURE
+				start := r.Bottom()
+				r = nodes2.Left()
+				emitAddSubtree(start, r)
+			case 0: // l == r
+				if l.merkleHash != r.merkleHash {
+					if r.level == 0 { // no point in going down on level0
+						emitUpdate(l, r)
+					} else {
+						// inspect the subtree, but with a limit -- up to the next boundary
+						moreNodes1 = append(moreNodes1, &Boundary{Iter: r.down})
+						moreNodes2 = append(moreNodes2, &Boundary{Iter: l.down})
+					}
 				}
-				nodes1.Left()
-				nodes2.Left()
-			} else if p1.timestamp < p2.timestamp { // add
-				fmt.Println("! p1 < p2 (add p2)", p2)
-				// source: p1=1        3
-				// target:    1  p2=2  3
-				addP2(p2)
-				nodes2.Left()
-			} else { // p1.timestamp > p2.timestamp, remove
-				fmt.Println("! p1 > p2 (remove p1)", p1)
-				// source:    1  p1=2  3
-				// target: p2=1        3
-				nodes1.Left() // keys are gone, we skip them (reverse run will catch them)
+				l = nodes1.Left()
+				r = nodes2.Left()
+			case 1: // l > r
+				// the whole l subtree is missing -- we skip it because the reverse run will catch it
+				l = nodes1.Left()
 			}
 		}
 
-		// for ; p2 != nil; p2, nodes2 = left(p2, nodes2) {
-		// 	fmt.Println("leftover p2", p2)
-		// 	moreNodes2 = append(moreNodes2, p2)
-		// }
-		for _, p2 := range nodes2.Nodes() {
-			addP2(p2)
+		// one of the two iterators is exhausted by this moment.
+		// so if there's anything left in the right, it should be added.
+		for r := nodes2.Current(); r != nil; {
+			start := r.Bottom()
+			r = nodes2.Left()
+			emitAddSubtree(start, r)
 		}
-		nodes1 = NewChain(GetNonBoundaryNodes(moreNodes1)...)
-		nodes2 = NewChain(GetNonBoundaryNodes(moreNodes2)...)
-		fmt.Println("expanded nodes1", nodes1)
-		fmt.Println("expanded nodes2", nodes2)
-		if !nodes1.More() && !nodes2.More() {
-			fmt.Println("no more nodes")
+
+		if len(moreNodes1) == 0 && len(moreNodes2) == 0 { // no more nodes worth inspecting
 			return
-		} else if !nodes1.More() { // add everything from the target
-			fmt.Println("OUT everything from the target")
-			for _, p2 := range GetNonBoundaryNodesForLevel0(nodes2.Nodes()) {
-				out = append(out, Delta{key: p2.timestamp, typ: "add", source: "", target: p2.data})
-			}
 		}
-		diffAtLevel(nodes1, nodes2, level-1)
+
+		diffAtLevel(NewChain(moreNodes1...), NewChain(moreNodes2...), level-1)
+
+		// addP2 := func(p2 *Node) {
+		// 	if p2.level == 0 {
+		// 		fmt.Println("OUT p2", p2)
+		// 		out = append(out, Delta{key: p2.timestamp, typ: "add", source: "", target: p2.data})
+		// 	} else {
+		// 		moreNodes2 = append(moreNodes2, p2)
+		// 	}
+		// }
+
+		// for nodes1.More() && nodes2.More() {
+		// 	p1, p2 := nodes1.Current(), nodes2.Current()
+		// 	if p1.timestamp == p2.timestamp { // might be update
+		// 		fmt.Println("! p1 == p2 [could be update]", p1, p2)
+		// 		if p1.merkleHash != p2.merkleHash {
+		// 			fmt.Println("queing for expansion both", p1, p2)
+		// 			moreNodes1 = append(moreNodes1, p1)
+		// 			moreNodes2 = append(moreNodes2, p2)
+		// 		}
+		// 		nodes1.Left()
+		// 		nodes2.Left()
+		// 	} else if p1.timestamp < p2.timestamp { // add
+		// 		fmt.Println("! p1 < p2 (add p2)", p2)
+		// 		// source: p1=1        3
+		// 		// target:    1  p2=2  3
+		// 		addP2(p2)
+		// 		nodes2.Left()
+		// 	} else { // p1.timestamp > p2.timestamp, remove
+		// 		fmt.Println("! p1 > p2 (remove p1)", p1)
+		// 		// source:    1  p1=2  3
+		// 		// target: p2=1        3
+		// 		nodes1.Left() // keys are gone, we skip them (reverse run will catch them)
+		// 	}
+		// }
+
+		// // for ; p2 != nil; p2, nodes2 = left(p2, nodes2) {
+		// // 	fmt.Println("leftover p2", p2)
+		// // 	moreNodes2 = append(moreNodes2, p2)
+		// // }
+		// for _, p2 := range nodes2.Nodes() {
+		// 	addP2(p2)
+		// }
+		// nodes1 = NewChain(GetNonBoundaryNodes(moreNodes1)...)
+		// nodes2 = NewChain(GetNonBoundaryNodes(moreNodes2)...)
+		// fmt.Println("expanded nodes1", nodes1)
+		// fmt.Println("expanded nodes2", nodes2)
+		// if !nodes1.More() && !nodes2.More() {
+		// 	fmt.Println("no more nodes")
+		// 	return
+		// } else if !nodes1.More() { // add everything from the target
+		// 	fmt.Println("OUT everything from the target")
+		// 	for _, p2 := range GetNonBoundaryNodesForLevel0(nodes2.Nodes()) {
+		// 		out = append(out, Delta{key: p2.timestamp, typ: "add", source: "", target: p2.data})
+		// 	}
+		// }
+		// diffAtLevel(nodes1, nodes2, level-1)
 	}
-	diffAtLevel(nodes1, nodes2, s.level)
+	diffAtLevel(s, t, s.level)
 	return out
 }
 

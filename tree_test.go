@@ -2,8 +2,9 @@ package main
 
 import (
 	"fmt"
-	"slices"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
 )
 
 // func mapIter(m map[string]string) Iter {
@@ -43,25 +44,27 @@ func TestBuild(t *testing.T) {
 }
 
 func TestDiff(t *testing.T) {
+	// {
+	// 	all := generate(20)
+	// 	t := NewTree(all)
+	// 	t.Dot("all.dot")
+	// 	t1 := NewTree(all)
+	// 	// t2 := NewTree(slices.Delete(slices.Delete(all, 3, 4), 14, 15))
+	// 	t2 := NewTree(slices.Delete(slices.Delete(all, 3, 18), 0, 1))
+	// 	t1.Dot("t1.dot")
+	// 	t2.Dot("t2.dot")
+	// 	fmt.Println(t2)
+	// 	fmt.Println(t1)
+	// 	// fmt.Println(Diff(t1, t2))
+	// 	fmt.Println(Diff(t2, t1))
+	// }
 	{
-		all := generate(20)
-		t := NewTree(all)
-		t.Dot("all.dot")
-		t1 := NewTree(all)
-		// t2 := NewTree(slices.Delete(slices.Delete(all, 3, 4), 14, 15))
-		t2 := NewTree(slices.Delete(slices.Delete(all, 3, 18), 0, 1))
+		t1 := NewTree(generate(2))
+		t2 := NewTree(generate(3))
 		t1.Dot("t1.dot")
 		t2.Dot("t2.dot")
-		fmt.Println(t2)
-		fmt.Println(t1)
-		// fmt.Println(Diff(t1, t2))
-		fmt.Println(Diff(t2, t1))
+		assert.Len(t, Diff(t1, t2), 1)
 	}
-	// {
-	// 	t1 := NewTree(generate(3))
-	// 	t2 := NewTree(generate(2))
-	// 	fmt.Println(Diff(t1, t2))
-	// }
 	// fmt.Println(tree)
 	// mustNil(tree.Build(files))
 }
