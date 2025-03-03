@@ -350,9 +350,9 @@ func (n *Node) CompareKey(o *Node) int {
 	}
 }
 
-func (n *Node) Descend(o *Node) *Node {
+func (n *Node) Descend(targetLevel int8) *Node {
 	var p = n
-	for ; p.level > o.level; p = p.down {
+	for ; p.level > targetLevel; p = p.down {
 	}
 	return p
 }
@@ -618,7 +618,8 @@ func (c *Chain) Left() *Node {
 
 func Diff(source, target *Tree) []Delta {
 	var out []Delta
-	s, t := source.Root().Descend(target.Root()), target.Root().Descend(source.Root())
+	minHeight := min(source.Root().level, target.Root().level)
+	s, t := source.Root().Descend(minHeight), target.Root().Descend(minHeight)
 	must(s.level == t.level, "levels must match")
 
 	emitUpdate := func(p1, p2 *Node) {
@@ -676,7 +677,7 @@ func Diff(source, target *Tree) []Delta {
 		}
 
 		// one of the two iterators is exhausted by this moment.
-		// so if there's anything left in the right, it should be added.
+		// so if anything remains in the right, it should be added or pushed down.
 		for r := nodes2.Current(); r != nil; r = nodes2.Left() {
 			if r.level == 0 {
 				emitAdd(r)
@@ -684,13 +685,10 @@ func Diff(source, target *Tree) []Delta {
 				moreNodes2 = append(moreNodes2, &Boundary{Iter: r.down.Iter()})
 			}
 		}
-		// any l is not exhausted, we skip it because the reverse run will catch it
-		for l := nodes1.Current(); l != nil; l = nodes1.Left() {
-		}
 
 		if len(moreNodes1) == 0 && len(moreNodes2) == 0 { // no more nodes worth inspecting
 			return
-		} else if len(moreNodes1) == 0 { // add everything from the right
+		} else if len(moreNodes1) == 0 { // left is empty, add everything from the right
 			nodes2 = NewChain(moreNodes2...)
 			for r := nodes2.Current(); r != nil; {
 				start := r.Bottom()
@@ -703,62 +701,6 @@ func Diff(source, target *Tree) []Delta {
 		nodes1 = NewChain(moreNodes1...)
 		nodes2 = NewChain(moreNodes2...)
 		diffAtLevel(nodes1, nodes2, level-1)
-
-		// addP2 := func(p2 *Node) {
-		// 	if p2.level == 0 {
-		// 		fmt.Println("OUT p2", p2)
-		// 		out = append(out, Delta{key: p2.timestamp, typ: "add", source: "", target: p2.data})
-		// 	} else {
-		// 		moreNodes2 = append(moreNodes2, p2)
-		// 	}
-		// }
-
-		// for nodes1.More() && nodes2.More() {
-		// 	p1, p2 := nodes1.Current(), nodes2.Current()
-		// 	if p1.timestamp == p2.timestamp { // might be update
-		// 		fmt.Println("! p1 == p2 [could be update]", p1, p2)
-		// 		if p1.merkleHash != p2.merkleHash {
-		// 			fmt.Println("queing for expansion both", p1, p2)
-		// 			moreNodes1 = append(moreNodes1, p1)
-		// 			moreNodes2 = append(moreNodes2, p2)
-		// 		}
-		// 		nodes1.Left()
-		// 		nodes2.Left()
-		// 	} else if p1.timestamp < p2.timestamp { // add
-		// 		fmt.Println("! p1 < p2 (add p2)", p2)
-		// 		// source: p1=1        3
-		// 		// target:    1  p2=2  3
-		// 		addP2(p2)
-		// 		nodes2.Left()
-		// 	} else { // p1.timestamp > p2.timestamp, remove
-		// 		fmt.Println("! p1 > p2 (remove p1)", p1)
-		// 		// source:    1  p1=2  3
-		// 		// target: p2=1        3
-		// 		nodes1.Left() // keys are gone, we skip them (reverse run will catch them)
-		// 	}
-		// }
-
-		// // for ; p2 != nil; p2, nodes2 = left(p2, nodes2) {
-		// // 	fmt.Println("leftover p2", p2)
-		// // 	moreNodes2 = append(moreNodes2, p2)
-		// // }
-		// for _, p2 := range nodes2.Nodes() {
-		// 	addP2(p2)
-		// }
-		// nodes1 = NewChain(GetNonBoundaryNodes(moreNodes1)...)
-		// nodes2 = NewChain(GetNonBoundaryNodes(moreNodes2)...)
-		// fmt.Println("expanded nodes1", nodes1)
-		// fmt.Println("expanded nodes2", nodes2)
-		// if !nodes1.More() && !nodes2.More() {
-		// 	fmt.Println("no more nodes")
-		// 	return
-		// } else if !nodes1.More() { // add everything from the target
-		// 	fmt.Println("OUT everything from the target")
-		// 	for _, p2 := range GetNonBoundaryNodesForLevel0(nodes2.Nodes()) {
-		// 		out = append(out, Delta{key: p2.timestamp, typ: "add", source: "", target: p2.data})
-		// 	}
-		// }
-		// diffAtLevel(nodes1, nodes2, level-1)
 	}
 	diffAtLevel(s.Iter(), t.Iter(), s.level)
 	return out
