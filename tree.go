@@ -595,7 +595,7 @@ func (c *Chain) Left() *Node {
 	if c.p == nil {
 		if len(c.nodes) > 1 {
 			c.nodes = c.nodes[1:]
-			c.p = c.nodes[0].Left()
+			c.p = c.nodes[0].Current()
 		}
 	}
 	return c.p
@@ -624,7 +624,7 @@ func Diff(source, target *Tree) []Delta {
 		if limit != nil {
 			p2 = &LessEqual{Iter: p2, Key: limit.timestamp}
 		}
-		for p := p2.Left(); p != nil; p = p2.Left() {
+		for p := p2.Current(); p != nil; p = p2.Left() {
 			emitAdd(p)
 		}
 	}
@@ -639,6 +639,7 @@ func Diff(source, target *Tree) []Delta {
 		moreNodes2 := []Iter{}
 
 		for l, r := nodes1.Current(), nodes2.Current(); l != nil && r != nil; {
+			fmt.Printf("l=%v r=%v\n", l.merkleHash, r.merkleHash)
 			switch l.CompareKey(r) {
 			case -1: // l < r
 				// the whole r subtree is missing -- everything on level0 should
@@ -667,7 +668,7 @@ func Diff(source, target *Tree) []Delta {
 
 		// one of the two iterators is exhausted by this moment.
 		// so if there's anything left in the right, it should be added.
-		for r := nodes2.Current(); r != nil; {
+		for r := nodes2.Current(); r != nil; r = nodes2.Left() {
 			moreNodes2 = append(moreNodes2, &Boundary{Iter: r.down.Iter()})
 			// start := r.Bottom()
 			// r = nodes2.Left()
