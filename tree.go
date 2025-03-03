@@ -302,6 +302,11 @@ type Node struct {
 	// hash       []byte // merkle hash
 }
 
+var _ Iter = &Node{}
+
+func (n *Node) Current() *Node { return n }
+func (n *Node) Left() *Node    { return n.left }
+
 // types of Nodes
 // boundary / promoted -- leades to node promotion, nodeHash <= BoundaryThreshold
 //   contains rolling merkleHash of the group of non-boundary nodes
@@ -493,51 +498,103 @@ type Delta struct {
 	target string
 }
 
-type Cursor struct {
-	nodes []*Node
+type Iter interface {
+	Current() *Node
+	Left() *Node
+}
+
+type LessEqual struct {
+	Iter
+	Key int
+
+	p    *Node
+	done bool
+}
+
+var _ Iter = &LessEqual{}
+
+func (b *LessEqual) Current() *Node { return b.p }
+func (b *LessEqual) Left() *Node {
+	if b.done {
+		return nil
+	}
+	b.p = b.Iter.Left()
+	if b.p == nil || b.p.timestamp <= b.Key {
+		b.done = true
+		return nil
+	}
+	return b.p
+}
+
+type Boundary struct {
+	Iter
+
+	p    *Node
+	done bool
+}
+
+var _ Iter = &Boundary{}
+
+func (b *Boundary) Current() *Node { return b.p }
+func (b *Boundary) Left() *Node {
+	if b.done {
+		return nil
+	}
+	b.p = b.Iter.Left()
+	if b.p == nil || b.p.IsBoundary() {
+		b.done = true
+		return nil
+	}
+	return b.p
+}
+
+type Chain struct {
+	nodes []Iter
 	p     *Node
 }
 
-func NewCursor(nodes ...*Node) *Cursor {
-	c := &Cursor{nodes: nodes}
+var _ Iter = &Chain{}
+
+func NewChain(nodes ...Iter) *Chain {
+	c := &Chain{nodes: nodes}
 	c.Left()
 	return c
 }
 
-func (c *Cursor) Append(n *Node) { c.nodes = append(c.nodes, n) }
-func (c *Cursor) More() bool     { return c.Current() != nil }
-func (c *Cursor) Current() *Node { return c.p }
-func (c *Cursor) Left() *Node {
+func (c *Chain) More() bool     { return c.Current() != nil }
+func (c *Chain) Current() *Node { return c.p }
+func (c *Chain) Left() *Node {
 	if c.p != nil {
-		c.p = c.p.left
+		c.p = c.nodes[0].Left()
 	}
 	if c.p == nil {
-		if len(c.nodes) > 0 {
-			c.p = c.nodes[0]
+		if len(c.nodes) > 1 {
 			c.nodes = c.nodes[1:]
+			c.p = c.nodes[0].Left()
 		}
 	}
 	return c.p
 }
-func (c *Cursor) Nodes() []*Node {
-	var out []*Node
-	for n := c.Current(); n != nil; n = c.Left() {
-		out = append(out, n)
-	}
-	return out
-}
+
+// func (c *Chain) Nodes() []*Node {
+// 	var out []*Node
+// 	for n := c.Current(); n != nil; n = c.Left() {
+// 		out = append(out, n)
+// 	}
+// 	return out
+// }
 
 func Diff(source, target *Tree) []Delta {
 	var out []Delta
 	s, t := source.Root().Descend(target.Root()), target.Root().Descend(source.Root())
 	assert(s.level == t.level, "levels must match")
-	nodes1 := NewCursor(s)
-	nodes2 := NewCursor(t)
+	nodes1 := NewChain(s)
+	nodes2 := NewChain(t)
 	fmt.Println("nodes1", nodes1)
 	fmt.Println("nodes2", nodes2)
 
-	var diffAtLevel func(nodes1, nodes2 *Cursor, level int8)
-	diffAtLevel = func(nodes1, nodes2 *Cursor, level int8) {
+	var diffAtLevel func(nodes1, nodes2 *Chain, level int8)
+	diffAtLevel = func(nodes1, nodes2 *Chain, level int8) {
 		if level < 0 {
 			return
 		}
@@ -588,8 +645,8 @@ func Diff(source, target *Tree) []Delta {
 		for _, p2 := range nodes2.Nodes() {
 			addP2(p2)
 		}
-		nodes1 = NewCursor(GetNonBoundaryNodes(moreNodes1)...)
-		nodes2 = NewCursor(GetNonBoundaryNodes(moreNodes2)...)
+		nodes1 = NewChain(GetNonBoundaryNodes(moreNodes1)...)
+		nodes2 = NewChain(GetNonBoundaryNodes(moreNodes2)...)
 		fmt.Println("expanded nodes1", nodes1)
 		fmt.Println("expanded nodes2", nodes2)
 		if !nodes1.More() && !nodes2.More() {
