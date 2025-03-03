@@ -301,10 +301,21 @@ type Node struct {
 	// hash       []byte // merkle hash
 }
 
-var _ Iter = &Node{}
+func (n *Node) Iter() Iter { return &NodeIter{P: n} }
 
-func (n *Node) Current() *Node { return n }
-func (n *Node) Left() *Node    { return n.left }
+var _ Iter = &NodeIter{}
+
+type NodeIter struct {
+	P *Node
+}
+
+func (n *NodeIter) Current() *Node { return n.P }
+func (n *NodeIter) Left() *Node {
+	if n.P != nil {
+		n.P = n.P.left
+	}
+	return n.P
+}
 
 // types of Nodes
 // boundary / promoted -- leades to node promotion, nodeHash <= BoundaryThreshold
@@ -628,15 +639,15 @@ func Diff(source, target *Tree) []Delta {
 				// NOT SURE
 				start := r.Bottom()
 				r = nodes2.Left()
-				emitAddSubtree(start, r)
+				emitAddSubtree(start.Iter(), r)
 			case 0: // l == r
 				if l.merkleHash != r.merkleHash {
 					if r.level == 0 { // no point in going down on level0
 						emitUpdate(l, r)
 					} else {
 						// inspect the subtree, but with a limit -- up to the next boundary
-						moreNodes1 = append(moreNodes1, &Boundary{Iter: r.down})
-						moreNodes2 = append(moreNodes2, &Boundary{Iter: l.down})
+						moreNodes1 = append(moreNodes1, &Boundary{Iter: l.down.Iter()})
+						moreNodes2 = append(moreNodes2, &Boundary{Iter: r.down.Iter()})
 					}
 				}
 				l = nodes1.Left()
@@ -650,9 +661,10 @@ func Diff(source, target *Tree) []Delta {
 		// one of the two iterators is exhausted by this moment.
 		// so if there's anything left in the right, it should be added.
 		for r := nodes2.Current(); r != nil; {
-			start := r.Bottom()
-			r = nodes2.Left()
-			emitAddSubtree(start, r)
+			moreNodes2 = append(moreNodes2, &Boundary{Iter: r.down.Iter()})
+			// start := r.Bottom()
+			// r = nodes2.Left()
+			// emitAddSubtree(start, r)
 		}
 
 		if len(moreNodes1) == 0 && len(moreNodes2) == 0 { // no more nodes worth inspecting
@@ -717,7 +729,7 @@ func Diff(source, target *Tree) []Delta {
 		// }
 		// diffAtLevel(nodes1, nodes2, level-1)
 	}
-	diffAtLevel(s, t, s.level)
+	diffAtLevel(s.Iter(), t.Iter(), s.level)
 	return out
 }
 
