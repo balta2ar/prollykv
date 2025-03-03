@@ -303,20 +303,6 @@ type Node struct {
 
 func (n *Node) Iter() Iter { return &NodeIter{P: n} }
 
-var _ Iter = &NodeIter{}
-
-type NodeIter struct {
-	P *Node
-}
-
-func (n *NodeIter) Current() *Node { return n.P }
-func (n *NodeIter) Left() *Node {
-	if n.P != nil {
-		n.P = n.P.left
-	}
-	return n.P
-}
-
 // types of Nodes
 // boundary / promoted -- leades to node promotion, nodeHash <= BoundaryThreshold
 //   contains rolling merkleHash of the group of non-boundary nodes
@@ -512,6 +498,20 @@ type Iter interface {
 	Left() *Node
 }
 
+type NodeIter struct {
+	P *Node
+}
+
+var _ Iter = &NodeIter{}
+
+func (n *NodeIter) Current() *Node { return n.P }
+func (n *NodeIter) Left() *Node {
+	if n.P != nil {
+		n.P = n.P.left
+	}
+	return n.P
+}
+
 type LessEqual struct {
 	Iter
 	Key int
@@ -523,8 +523,11 @@ type LessEqual struct {
 var _ Iter = &LessEqual{}
 
 func (b *LessEqual) Current() *Node {
+	if b.done {
+		return nil
+	}
 	if b.p == nil {
-		return b.Left()
+		return b.Iter.Current()
 	}
 	return b.p
 }
@@ -550,8 +553,11 @@ type Boundary struct {
 var _ Iter = &Boundary{}
 
 func (b *Boundary) Current() *Node {
+	if b.done {
+		return nil
+	}
 	if b.p == nil {
-		return b.Left()
+		return b.Iter.Current()
 	}
 	return b.p
 }
@@ -575,8 +581,9 @@ type Chain struct {
 var _ Iter = &Chain{}
 
 func NewChain(nodes ...Iter) *Chain {
+	must(len(nodes) > 0, "at least one node is required")
 	c := &Chain{nodes: nodes}
-	c.Left()
+	c.p = c.nodes[0].Current()
 	return c
 }
 
