@@ -650,12 +650,13 @@ func Diff(source, target *Tree) []Delta {
 			fmt.Printf("l=%v r=%v\n", l.merkleHash[:4], r.merkleHash[:4])
 			switch l.CompareKey(r) {
 			case -1: // l < r
-				// the whole r subtree is missing -- everything on level0 should
-				// be added until the r.Left().key (excluding)
-				// NOT SURE
-				start := r.Bottom()
+				// the r subtree is missing, push it down or add if we're on level0
+				if r.level == 0 {
+					emitAdd(r)
+				} else {
+					moreNodes2 = append(moreNodes2, &Boundary{Iter: r.down.Iter()})
+				}
 				r = nodes2.Left()
-				emitAddSubtree(start.Iter(), r)
 			case 0: // l == r
 				if l.merkleHash != r.merkleHash {
 					if r.level == 0 { // no point in going down on level0
