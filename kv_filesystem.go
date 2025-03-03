@@ -47,7 +47,7 @@ func (kv *FileSystem) MustReset() {
 	kv.MustBaseDir()
 }
 
-func (kv *FileSystem) Cursor() Cursor {
+func (kv *FileSystem) Cursor() KVCursor {
 	return &FileSystemCursor{
 		dir: kv.dir,
 	}
@@ -59,7 +59,7 @@ type FileSystemCursor struct {
 	index int
 }
 
-var _ Cursor = &FileSystemCursor{}
+var _ KVCursor = &FileSystemCursor{}
 
 func mustList(dir string) []string {
 	entries, err := os.ReadDir(dir)
