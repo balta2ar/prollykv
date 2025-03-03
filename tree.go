@@ -262,13 +262,13 @@ func NextLevel(prev *Level) *Level {
 			eligible = append(eligible, n.CreateHigherLevel())
 		}
 	}
-	LinkNodes(eligible)
-	for _, n := range eligible {
+	linked := LinkNodes(eligible)
+	for _, n := range linked {
 		n.FillMerkleHash()
 	}
 	next := NewLevel(prev.level + 1)
-	next.tail = eligible[len(eligible)-1]
-	next.size = len(eligible)
+	next.tail = linked[len(linked)-1]
+	next.size = len(linked)
 	return next
 }
 
