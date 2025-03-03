@@ -386,8 +386,7 @@ func (n *Node) CreateHigherLevel() *Node {
 	node.level = n.level + 1
 	node.down = n
 	n.up = node
-	// node.nodeHash = Rehash(n.nodeHash)
-	node.merkleHash = "" // to be filled later
+	node.merkleHash = "" // to be filled later by FillMerkleHash
 	return node
 }
 
@@ -580,13 +579,6 @@ type Chain struct {
 
 var _ Iter = &Chain{}
 
-// type NilIter struct{}
-
-// var _ Iter = &NilIter{}
-
-// func (n *NilIter) Current() *Node { return nil }
-// func (n *NilIter) Left() *Node    { return nil }
-
 func NewChain(nodes ...Iter) Iter {
 	must(len(nodes) > 0, "at least one node is required")
 	c := &Chain{nodes: nodes}
@@ -607,14 +599,6 @@ func (c *Chain) Left() *Node {
 	}
 	return c.p
 }
-
-// func (c *Chain) Nodes() []*Node {
-// 	var out []*Node
-// 	for n := c.Current(); n != nil; n = c.Left() {
-// 		out = append(out, n)
-// 	}
-// 	return out
-// }
 
 func Diff(source, target *Tree) []Delta {
 	var out []Delta
