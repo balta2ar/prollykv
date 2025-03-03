@@ -580,7 +580,14 @@ type Chain struct {
 
 var _ Iter = &Chain{}
 
-func NewChain(nodes ...Iter) *Chain {
+// type NilIter struct{}
+
+// var _ Iter = &NilIter{}
+
+// func (n *NilIter) Current() *Node { return nil }
+// func (n *NilIter) Left() *Node    { return nil }
+
+func NewChain(nodes ...Iter) Iter {
 	must(len(nodes) > 0, "at least one node is required")
 	c := &Chain{nodes: nodes}
 	c.p = c.nodes[0].Current()
@@ -672,7 +679,10 @@ func Diff(source, target *Tree) []Delta {
 			moreNodes2 = append(moreNodes2, &Boundary{Iter: r.down.Iter()})
 			// start := r.Bottom()
 			// r = nodes2.Left()
-			// emitAddSubtree(start, r)
+			// emitAddSubtree(start.Iter(), r)
+		}
+		// any l is not exhausted, we skip it because the reverse run will catch it
+		for l := nodes1.Current(); l != nil; l = nodes1.Left() {
 		}
 
 		if len(moreNodes1) == 0 && len(moreNodes2) == 0 { // no more nodes worth inspecting
