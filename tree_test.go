@@ -84,6 +84,8 @@ func TestDiff(t *testing.T) {
 	{
 		t1 := NewTree(generate(30)[10:20])
 		t2 := NewTree(generate(30))
+		t1.Dot("t1.dot")
+		t2.Dot("t2.dot")
 		assert.Len(t, Diff(t1, t2), 20)
 	}
 	// fmt.Println(tree)

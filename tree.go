@@ -678,10 +678,11 @@ func Diff(source, target *Tree) []Delta {
 		// one of the two iterators is exhausted by this moment.
 		// so if there's anything left in the right, it should be added.
 		for r := nodes2.Current(); r != nil; r = nodes2.Left() {
-			moreNodes2 = append(moreNodes2, &Boundary{Iter: r.down.Iter()})
-			// start := r.Bottom()
-			// r = nodes2.Left()
-			// emitAddSubtree(start.Iter(), r)
+			if r.level == 0 {
+				emitAdd(r)
+			} else {
+				moreNodes2 = append(moreNodes2, &Boundary{Iter: r.down.Iter()})
+			}
 		}
 		// any l is not exhausted, we skip it because the reverse run will catch it
 		for l := nodes1.Current(); l != nil; l = nodes1.Left() {
