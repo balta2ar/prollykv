@@ -286,14 +286,14 @@ func LinkNodes(nodes []*Node) []*Node {
 const HashSize = 32
 
 type Node struct {
-	level      int8
-	timestamp  int
-	data       string
-	up         *Node
-	down       *Node
-	left       *Node
-	right      *Node
-	nodeHash   string // node hash, sha256
+	level     int8
+	timestamp int
+	data      string
+	up        *Node
+	down      *Node
+	left      *Node
+	right     *Node
+	// nodeHash   string // node hash, sha256
 	merkleHash string // rolling merkle hash
 	boundary   *bool
 	isTail     bool
@@ -318,8 +318,8 @@ func NewNode(timestamp int, data string, isTail bool) *Node {
 		data:       data,
 		isTail:     isTail,
 		merkleHash: hash,
-		nodeHash:   hash,
 		boundary:   nil,
+		// nodeHash:   hash,
 	}
 	return node
 }
@@ -354,7 +354,7 @@ func (n *Node) IsBoundary() bool {
 	if n.boundary != nil {
 		return *n.boundary
 	}
-	boundary := n.isTail || IsBoundaryHash(n.nodeHash)
+	boundary := n.isTail || IsBoundaryHash(n.merkleHash)
 	n.boundary = &boundary
 	return boundary
 }
@@ -364,7 +364,8 @@ func (n *Node) CreateHigherLevel() *Node {
 	node.level = n.level + 1
 	node.down = n
 	n.up = node
-	node.nodeHash = Rehash(n.nodeHash)
+	// node.nodeHash = Rehash(n.nodeHash)
+	node.merkleHash = Rehash(n.merkleHash)
 	return node
 }
 
