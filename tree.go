@@ -625,6 +625,7 @@ func Diff(source, target *Tree) []Delta {
 		out = append(out, Delta{key: p2.timestamp, typ: "update", source: p1.data, target: p2.data})
 	}
 	emitAdd := func(p2 *Node) {
+		fmt.Printf("+ p2 %v\n", p2.merkleHash[:4])
 		out = append(out, Delta{key: p2.timestamp, typ: "add", source: "", target: p2.data})
 	}
 	emitAddSubtree := func(p2 Iter, limit *Node) {
@@ -646,7 +647,7 @@ func Diff(source, target *Tree) []Delta {
 		moreNodes2 := []Iter{}
 
 		for l, r := nodes1.Current(), nodes2.Current(); l != nil && r != nil; {
-			fmt.Printf("l=%v r=%v\n", l.merkleHash, r.merkleHash)
+			fmt.Printf("l=%v r=%v\n", l.merkleHash[:4], r.merkleHash[:4])
 			switch l.CompareKey(r) {
 			case -1: // l < r
 				// the whole r subtree is missing -- everything on level0 should
@@ -687,9 +688,19 @@ func Diff(source, target *Tree) []Delta {
 
 		if len(moreNodes1) == 0 && len(moreNodes2) == 0 { // no more nodes worth inspecting
 			return
+		} else if len(moreNodes1) == 0 { // add everything from the right
+			nodes2 = NewChain(moreNodes2...)
+			for r := nodes2.Current(); r != nil; {
+				start := r.Bottom()
+				r = nodes2.Left()
+				emitAddSubtree(start.Iter(), r)
+			}
+			return
 		}
 
-		diffAtLevel(NewChain(moreNodes1...), NewChain(moreNodes2...), level-1)
+		nodes1 = NewChain(moreNodes1...)
+		nodes2 = NewChain(moreNodes2...)
+		diffAtLevel(nodes1, nodes2, level-1)
 
 		// addP2 := func(p2 *Node) {
 		// 	if p2.level == 0 {

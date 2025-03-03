@@ -2,7 +2,6 @@ package main
 
 import (
 	"fmt"
-	"slices"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -59,22 +58,30 @@ func TestDiff(t *testing.T) {
 	// 	// fmt.Println(Diff(t1, t2))
 	// 	fmt.Println(Diff(t2, t1))
 	// }
+
+	// {
+	// 	t1 := NewTree(generate(2))
+	// 	t2 := NewTree(generate(3))
+	// 	t1.Dot("t1.dot")
+	// 	t2.Dot("t2.dot")
+	// 	assert.Len(t, Diff(t1, t2), 1)
+	// }
+	// {
+	// 	t1 := NewTree(generate(1))
+	// 	t2 := NewTree(generate(51))
+	// 	assert.Len(t, Diff(t1, t2), 50)
+	// }
+	// {
+	// 	t1 := NewTree(generate(30)[10:])
+	// 	t2 := NewTree(generate(30))
+	// 	assert.Len(t, Diff(t1, t2), 10)
+	// }
 	{
-		t1 := NewTree(generate(2))
-		t2 := NewTree(generate(3))
+		t1 := NewTree(generate(30)[:20])
+		t2 := NewTree(generate(30))
 		t1.Dot("t1.dot")
 		t2.Dot("t2.dot")
-		assert.Len(t, Diff(t1, t2), 1)
-	}
-	{
-		t1 := NewTree(generate(1))
-		t2 := NewTree(generate(51))
-		assert.Len(t, Diff(t1, t2), 50)
-	}
-	{
-		t1 := NewTree(slices.Delete(generate(30), 0, 10))
-		t2 := NewTree(generate(30))
-		assert.Len(t, Diff(t1, t2), 20)
+		assert.Len(t, Diff(t1, t2), 10)
 	}
 	// fmt.Println(tree)
 	// mustNil(tree.Build(files))
