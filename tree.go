@@ -727,10 +727,10 @@ func Diff(source, target *Tree) (out DeltaTrio) {
 	diffAtLevel(s.Iter(), t.Iter(), s.level)
 	out.Add, out.Update = add, update
 
-	// add = []Delta{}
-	// update = nil
-	// diffAtLevel(t.Iter(), s.Iter(), s.level)
-	// out.Remove = add
+	add = []Delta{}
+	update = nil
+	diffAtLevel(t.Iter(), s.Iter(), s.level)
+	out.Remove = add
 	return out
 }
 
