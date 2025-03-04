@@ -677,6 +677,9 @@ func Diff(source, target *Tree) (out DeltaTrio) {
 				r = nodes2.Left()
 			case 1: // l > r
 				// the whole l subtree is missing -- we skip it because the reverse run will catch it
+				if l.level > 0 {
+					moreNodes1 = append(moreNodes1, &Boundary{Iter: l.down.Iter()})
+				}
 				l = nodes1.Left()
 			}
 		}
