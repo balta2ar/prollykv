@@ -693,8 +693,7 @@ func Diff(source, target *Tree) (out DeltaTrio) {
 			}
 		}
 
-		// one of the two iterators is exhausted by this moment.
-		// so if anything remains in the right, it should be added or pushed down.
+		// if anything remains in the right, it should be added or pushed down.
 		for r := nodes2.Current(); r != nil; r = nodes2.Left() {
 			if r.level == 0 {
 				emitAdd(r)
