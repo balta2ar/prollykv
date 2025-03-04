@@ -653,7 +653,7 @@ func Diff(source, target *Tree) (out DeltaTrio) {
 		moreNodes2 := []Iter{}
 
 		for l, r := nodes1.Current(), nodes2.Current(); l != nil && r != nil; {
-			fmt.Printf("l=%v r=%v\n", l.merkleHash[:4], r.merkleHash[:4])
+			fmt.Printf("L%d l=%v r=%v key %d %d\n", level, l.merkleHash[:4], r.merkleHash[:4], l.timestamp, r.timestamp)
 			switch l.CompareKey(r) {
 			case -1: // l < r
 				// the r subtree is missing, push it down or add if we're on level0
@@ -724,10 +724,10 @@ func Diff(source, target *Tree) (out DeltaTrio) {
 	diffAtLevel(s.Iter(), t.Iter(), s.level)
 	out.Add, out.Update = add, update
 
-	add = []Delta{}
-	update = nil
-	diffAtLevel(t.Iter(), s.Iter(), s.level)
-	out.Remove = add
+	// add = []Delta{}
+	// update = nil
+	// diffAtLevel(t.Iter(), s.Iter(), s.level)
+	// out.Remove = add
 	return out
 }
 
