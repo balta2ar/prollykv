@@ -492,6 +492,12 @@ type Delta struct {
 	target string
 }
 
+type DeltaTrio struct {
+	Add    []Delta
+	Remove []Delta
+	Update []Delta
+}
+
 type Iter interface {
 	Current() *Node
 	Left() *Node
@@ -600,18 +606,23 @@ func (c *Chain) Left() *Node {
 	return c.p
 }
 
-func Diff(source, target *Tree) []Delta {
-	var out []Delta
+func Diff(source, target *Tree) (out DeltaTrio) {
 	minHeight := min(source.Root().level, target.Root().level)
 	s, t := source.Root().Descend(minHeight), target.Root().Descend(minHeight)
 	must(s.level == t.level, "levels must match")
 
+	var add, update []Delta
 	emitUpdate := func(p1, p2 *Node) {
-		out = append(out, Delta{key: p2.timestamp, typ: "update", source: p1.data, target: p2.data})
+		if update != nil {
+			fmt.Printf("= %v => %v\n", p1.timestamp, p2.timestamp)
+			update = append(update, Delta{key: p2.timestamp, typ: "update", source: p1.data, target: p2.data})
+		}
 	}
 	emitAdd := func(p2 *Node) {
-		fmt.Printf("+ p2 %v\n", p2.merkleHash[:4])
-		out = append(out, Delta{key: p2.timestamp, typ: "add", source: "", target: p2.data})
+		if add != nil {
+			fmt.Printf("+ p2 %v\n", p2.merkleHash[:4])
+			add = append(add, Delta{key: p2.timestamp, typ: "add", source: "", target: p2.data})
+		}
 	}
 	emitAddSubtree := func(p2 Iter, limit *Node) {
 		if limit != nil {
@@ -660,6 +671,15 @@ func Diff(source, target *Tree) []Delta {
 			}
 		}
 
+		fmt.Printf("nodes1 %v\n", nodes1.Current())
+		fmt.Printf("nodes2 %v\n", nodes2.Current())
+
+		for l := nodes1.Current(); l != nil; l = nodes1.Left() {
+			if l.level > 0 {
+				moreNodes1 = append(moreNodes1, &Boundary{Iter: l.down.Iter()})
+			}
+		}
+
 		// one of the two iterators is exhausted by this moment.
 		// so if anything remains in the right, it should be added or pushed down.
 		for r := nodes2.Current(); r != nil; r = nodes2.Left() {
@@ -669,6 +689,9 @@ func Diff(source, target *Tree) []Delta {
 				moreNodes2 = append(moreNodes2, &Boundary{Iter: r.down.Iter()})
 			}
 		}
+
+		must(nodes1.Current() == nil, "nodes1 must be exhausted")
+		must(nodes2.Current() == nil, "nodes2 must be exhausted")
 
 		if len(moreNodes1) == 0 && len(moreNodes2) == 0 { // no more nodes worth inspecting
 			return
@@ -686,7 +709,15 @@ func Diff(source, target *Tree) []Delta {
 		nodes2 = NewChain(moreNodes2...)
 		diffAtLevel(nodes1, nodes2, level-1)
 	}
+	add = []Delta{}
+	update = []Delta{}
 	diffAtLevel(s.Iter(), t.Iter(), s.level)
+	out.Add, out.Update = add, update
+
+	add = []Delta{}
+	update = nil
+	diffAtLevel(t.Iter(), s.Iter(), s.level)
+	out.Remove = add
 	return out
 }
 

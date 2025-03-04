@@ -7,26 +7,8 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-// func mapIter(m map[string]string) Iter {
-// 	keys := make([]string, 0, len(m))
-// 	for k := range m {
-// 		keys = append(keys, k)
-// 	}
-// 	sort.Strings(keys)
-// 	return func(cb func(key []byte, value []byte) error) error {
-// 		for _, k := range keys {
-// 			err := cb([]byte(k), []byte(m[k]))
-// 			if err != nil {
-// 				return err
-// 			}
-// 		}
-// 		return nil
-// 	}
-// }
-
-func generate(n int) []*Message {
+func generate1(n int) []*Message {
 	m := []*Message{}
-	// n := 1000
 	for i := range n {
 		data := fmt.Sprintf("value %d", i)
 		m = append(m, &Message{timestamp: i, data: data})
@@ -34,8 +16,17 @@ func generate(n int) []*Message {
 	return m
 }
 
+func generate2(n int) []*Message {
+	m := []*Message{}
+	for i := range n {
+		data := fmt.Sprintf("value2 %d", i)
+		m = append(m, &Message{timestamp: i, data: data})
+	}
+	return m
+}
+
 func TestBuild(t *testing.T) {
-	messages := generate(10)
+	messages := generate1(10)
 	kv := NewKVFile()
 	kv.MustReset()
 	tree := NewTree(messages)
@@ -60,37 +51,45 @@ func TestDiff(t *testing.T) {
 	// }
 
 	{
-		t1 := NewTree(generate(2))
-		t2 := NewTree(generate(3))
+		t1 := NewTree(generate1(2))
+		t2 := NewTree(generate1(3))
 		t1.Dot("t1.dot")
 		t2.Dot("t2.dot")
-		assert.Len(t, Diff(t1, t2), 1)
+		assert.Len(t, Diff(t1, t2).Add, 1)
 	}
 	{
-		t1 := NewTree(generate(1))
-		t2 := NewTree(generate(51))
-		assert.Len(t, Diff(t1, t2), 50)
+		t1 := NewTree(generate1(1))
+		t2 := NewTree(generate1(51))
+		assert.Len(t, Diff(t1, t2).Add, 50)
 	}
 	{
-		t1 := NewTree(generate(30)[10:])
-		t2 := NewTree(generate(30))
-		assert.Len(t, Diff(t1, t2), 10)
+		t1 := NewTree(generate1(30)[10:])
+		t2 := NewTree(generate1(30))
+		assert.Len(t, Diff(t1, t2).Add, 10)
 	}
 	{
-		t1 := NewTree(generate(30)[:20])
-		t2 := NewTree(generate(30))
-		assert.Len(t, Diff(t1, t2), 10)
+		t1 := NewTree(generate1(30)[:20])
+		t2 := NewTree(generate1(30))
+		assert.Len(t, Diff(t1, t2).Add, 10)
 	}
 	{
-		t1 := NewTree(generate(30)[10:20])
-		t2 := NewTree(generate(30))
-		assert.Len(t, Diff(t1, t2), 20)
+		t1 := NewTree(generate1(30)[10:20])
+		t2 := NewTree(generate1(30))
+		assert.Len(t, Diff(t1, t2).Add, 20)
 	}
 	{
-		g := generate(100)
+		g := generate1(100)
 		t1 := NewTree(append(g[:10], append(g[20:30], append(g[40:50], append(g[60:70], g[80:90]...)...)...)...))
-		t2 := NewTree(generate(100))
-		assert.Len(t, Diff(t1, t2), 50)
+		t2 := NewTree(generate1(100))
+		assert.Len(t, Diff(t1, t2).Add, 50)
+	}
+	{
+		t1 := NewTree(generate1(10))
+		t2 := NewTree(generate2(10))
+		d := Diff(t1, t2)
+		assert.Len(t, d.Add, 0)
+		assert.Len(t, d.Update, 10)
+		assert.Len(t, d.Remove, 0)
 	}
 	// fmt.Println(tree)
 	// mustNil(tree.Build(files))
