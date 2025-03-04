@@ -585,8 +585,18 @@ type Chain struct {
 
 var _ Iter = &Chain{}
 
+type NilIter struct{}
+
+var _ Iter = &NilIter{}
+
+func (n *NilIter) Current() *Node { return nil }
+func (n *NilIter) Left() *Node    { return nil }
+
 func NewChain(nodes ...Iter) Iter {
-	must(len(nodes) > 0, "at least one node is required")
+	// must(len(nodes) > 0, "at least one node is required")
+	if len(nodes) == 0 {
+		return &NilIter{}
+	}
 	c := &Chain{nodes: nodes}
 	c.p = c.nodes[0].Current()
 	return c
