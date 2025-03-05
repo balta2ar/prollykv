@@ -756,6 +756,20 @@ func (t *Tree) Serialize(onto KV) error {
 	return onto.Set([]byte("root"), []byte(t.Root().Key()))
 }
 
+func Deserialize(kv KV) (*Tree, error) {
+	tree := &Tree{}
+	rootKey, found, err := kv.Get([]byte("root"))
+	if err != nil {
+		return nil, err
+	}
+	if !found {
+		return nil, fmt.Errorf("root key not found")
+	}
+	level, key := StrDecodeKey(string(rootKey))
+
+	return tree, nil
+}
+
 // func (this *Tree) GetNode(level int8, key []byte) (*Node, error) {
 // 	entry_key := EncodeKey(level, key)
 // 	value, err := this.kv.Get(entry_key)
