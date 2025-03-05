@@ -282,7 +282,8 @@ func LinkNodes(nodes []*Node) []*Node {
 
 // ----------------------------------------------------------------
 
-const HashSize = 32
+// const HashSize = 32
+const HashSize = 64
 
 type Node struct {
 	level     int8
@@ -322,6 +323,14 @@ func NewNode(timestamp int, data string, isTail bool) *Node {
 		boundary:   nil,
 	}
 	return node
+}
+
+func (n *Node) Key() string {
+	return StrEncodeKey(n.level, fmt.Sprintf("%d", n.timestamp))
+}
+
+func (n *Node) Value() string {
+	return StrEncodeValue(n.merkleHash, n.data)
 }
 
 func (n *Node) String() string {
@@ -731,6 +740,21 @@ func Diff(source, target *Tree) (out DeltaTrio) {
 	diffAtLevel(t.Iter(), s.Iter(), s.level)
 	out.Remove = add
 	return out
+}
+
+func (t *Tree) Serialize(onto KV) error {
+	for _, level := range t.levels {
+		for n := level.tail; n != nil; n = n.left {
+			key := n.Key()
+			value := n.Value()
+			err := onto.Set([]byte(key), []byte(value))
+			if err != nil {
+				return err
+			}
+		}
+	}
+	onto.Set([]byte("root"), []byte(t.Root().Key()))
+	return nil
 }
 
 // func (this *Tree) GetNode(level int8, key []byte) (*Node, error) {

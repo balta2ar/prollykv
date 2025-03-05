@@ -21,3 +21,23 @@ func DecodeKey(data []byte) (int8, []byte) {
 func DecodeValue(data []byte) ([]byte, []byte) {
 	return data[:HashSize], data[HashSize:]
 }
+
+func StrEncodeKey(level int8, key string) string {
+	sLevel := fmt.Sprintf("%02d", level)
+	return sLevel + key
+}
+
+func StrDecodeKey(data string) (int8, string) {
+	level := int8(0)
+	_, err := fmt.Sscanf(data[:2], "%d", &level)
+	mustNil(err)
+	return level, data[2:]
+}
+
+func StrEncodeValue(hash string, value string) string {
+	return hash[:HashSize] + value // TODO: remove later
+}
+
+func StrDecodeValue(data string) (string, string) {
+	return data[:HashSize], data[HashSize:]
+}
