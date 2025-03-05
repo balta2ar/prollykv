@@ -1,7 +1,7 @@
 package main
 
 type KV interface {
-	Get(key []byte) ([]byte, error)
+	Get(key []byte) ([]byte, bool, error)
 	Set(key []byte, value []byte) error
 	Cursor() KVCursor
 }

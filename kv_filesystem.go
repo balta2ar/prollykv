@@ -21,9 +21,16 @@ func NewKVFile() *FileSystem {
 	return this
 }
 
-func (kv *FileSystem) Get(key []byte) ([]byte, error) {
+func (kv *FileSystem) Get(key []byte) ([]byte, bool, error) {
 	path := filepath.Join(kv.dir, string(key))
-	return os.ReadFile(path)
+	data, err := os.ReadFile(path)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil, false, nil
+		}
+		return nil, false, err
+	}
+	return data, true, nil
 }
 
 func (kv *FileSystem) Set(key []byte, value []byte) error {
