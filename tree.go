@@ -753,8 +753,7 @@ func (t *Tree) Serialize(onto KV) error {
 			}
 		}
 	}
-	onto.Set([]byte("root"), []byte(t.Root().Key()))
-	return nil
+	return onto.Set([]byte("root"), []byte(t.Root().Key()))
 }
 
 // func (this *Tree) GetNode(level int8, key []byte) (*Node, error) {
