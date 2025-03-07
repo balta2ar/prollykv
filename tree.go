@@ -766,7 +766,6 @@ func Deserialize(kv KV) (*Tree, error) {
 		encodedValue := cur.Value()
 		_, key := StrDecodeKey(string(encodedKey))
 		_, value := StrDecodeValue(string(encodedValue))
-		fmt.Println("key", key)
 		intKey := MustAtoi(key)
 		if intKey == -1 {
 			continue
