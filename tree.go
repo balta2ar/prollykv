@@ -773,7 +773,6 @@ func Deserialize(kv KV) (*Tree, error) {
 		m := &Message{timestamp: intKey, data: value}
 		level0 = append(level0, m)
 	}
-	fmt.Println("level0", level0)
 	return NewTree(level0), nil
 }
 
