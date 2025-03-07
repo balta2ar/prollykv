@@ -156,4 +156,10 @@ func TestSerialize(t *testing.T) {
 	kv := NewKVFile()
 	kv.MustReset()
 	assert.Nil(t, t1.Serialize(kv))
+	t2, err := Deserialize(kv)
+	assert.Nil(t, err)
+	d := Diff(t1, t2)
+	assert.Len(t, d.Add, 0)
+	assert.Len(t, d.Update, 0)
+	assert.Len(t, d.Remove, 0)
 }

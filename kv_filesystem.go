@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+	"strings"
 )
 
 type FileSystem struct {
@@ -82,12 +83,10 @@ func (f *FileSystemCursor) Goto(key []byte) {
 	f.keys = mustList(f.dir)
 	sort.Strings(f.keys)
 	s := string(key)
-	i := sort.SearchStrings(f.keys, s)
-	if i < len(f.keys) && f.keys[i] == s {
-		f.index = i
-	} else {
-		f.index = len(f.keys)
-	}
+	i := sort.Search(len(f.keys), func(i int) bool {
+		return strings.HasPrefix(f.keys[i], s)
+	})
+	f.index = min(i, len(f.keys))
 }
 
 func (f *FileSystemCursor) Next() {

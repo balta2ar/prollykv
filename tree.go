@@ -757,17 +757,31 @@ func (t *Tree) Serialize(onto KV) error {
 }
 
 func Deserialize(kv KV) (*Tree, error) {
-	tree := &Tree{}
-	rootKey, found, err := kv.Get([]byte("root"))
-	if err != nil {
-		return nil, err
+	cur := kv.Cursor()
+	start := StrEncodeKey(0, "")
+	cur.Goto([]byte(start))
+	level0 := []*Message{}
+	for ; strings.HasPrefix(string(cur.Key()), start); cur.Next() {
+		encodedKey := cur.Key()
+		encodedValue := cur.Value()
+		_, key := StrDecodeKey(string(encodedKey))
+		_, value := StrDecodeValue(string(encodedValue))
+		fmt.Println("key", key)
+		intKey := MustAtoi(key)
+		if intKey == -1 {
+			continue
+		}
+		m := &Message{timestamp: intKey, data: value}
+		level0 = append(level0, m)
 	}
-	if !found {
-		return nil, fmt.Errorf("root key not found")
-	}
-	level, key := StrDecodeKey(string(rootKey))
+	fmt.Println("level0", level0)
+	return NewTree(level0), nil
+}
 
-	return tree, nil
+func MustAtoi(s string) int {
+	v, err := strconv.Atoi(s)
+	mustNil(err)
+	return v
 }
 
 // func (this *Tree) GetNode(level int8, key []byte) (*Node, error) {
