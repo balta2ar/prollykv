@@ -143,7 +143,7 @@ func ListBasedDiff(a, b []*Message) (out DeltaTrio) {
 			out.Add = append(out.Add, Delta{})
 		}
 	}
-	for ts, _ := range mapA {
+	for ts := range mapA {
 		if _, exists := mapB[ts]; !exists {
 			out.Remove = append(out.Remove, Delta{})
 		}
