@@ -219,7 +219,7 @@ func TestSizeSerializeJSON(t *testing.T) {
 		assert.Nil(t, err)
 		defer file.Close()
 		assert.Nil(t, t1.SerializeJSON(gen, file))
-		fmt.Printf("%d,json,%d\n", gen, MustDirSize(kv.dir))
+		fmt.Printf("%d,json,%d,%d\n", gen, MustDirSize(kv.dir), t1.Height())
 	}
 }
 
@@ -229,6 +229,6 @@ func TestSizeSerializeWithKids(t *testing.T) {
 	for gen := range 1000 {
 		t1 := NewTree(generate1(gen))
 		assert.Nil(t, t1.SerializeWithKids(gen, kv))
-		fmt.Printf("%d,prolly,%d\n", gen, MustDirSize(kv.dir))
+		fmt.Printf("%d,prolly,%d,%d\n", gen, MustDirSize(kv.dir), t1.Height())
 	}
 }

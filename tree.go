@@ -29,9 +29,8 @@ type Tree struct {
 	levels []*Level
 }
 
-func (t *Tree) Root() *Node {
-	return t.levels[len(t.levels)-1].tail
-}
+func (t *Tree) Height() int { return len(t.levels) }
+func (t *Tree) Root() *Node { return t.levels[len(t.levels)-1].tail }
 
 func NewTree(messages []*Message) *Tree {
 	tree := &Tree{}
