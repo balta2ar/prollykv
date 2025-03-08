@@ -14,11 +14,11 @@ import (
 )
 
 type Message struct {
-	timestamp int
+	timestamp string
 	data      string
 }
 
-func NewMessage(timestamp int, data string) *Message {
+func NewMessage(timestamp string, data string) *Message {
 	return &Message{timestamp: timestamp, data: data}
 }
 
@@ -132,7 +132,7 @@ func (t *Tree) Dot(filename string) {
 		}
 
 		// Create node label with all relevant information
-		label := fmt.Sprintf("ts: %d\\nMHash: %s\\ntype: %s\\nlevel: %d",
+		label := fmt.Sprintf("ts: %s\\nhash: %s\\ntype: %s\\nlevel: %d",
 			node.timestamp, shortHash, nodeType, node.level)
 
 		// Style nodes based on type
@@ -225,7 +225,7 @@ func (l *Level) AsList() []*Node {
 func (l *Level) String() string {
 	xs := []string{"tail"}
 	for t := l.tail; t != nil; t = t.left {
-		s := fmt.Sprintf("%d", t.timestamp)
+		s := fmt.Sprintf("%s", t.timestamp)
 		if t.IsBoundary() {
 			s += "*"
 		}
@@ -287,7 +287,7 @@ const HashSize = 64
 
 type Node struct {
 	level     int8
-	timestamp int
+	timestamp string
 	data      string
 	up        *Node
 	down      *Node
@@ -312,11 +312,11 @@ func (n *Node) Iter() Iter { return &NodeIter{P: n} }
 //   in this design, it's on the right side.
 //
 
-func TailKey() int           { return 0 }
-func IsTailKey(key int) bool { return key == TailKey() }
+func TailKey() string           { return "<TAIL>" }
+func IsTailKey(key string) bool { return key == TailKey() }
 
-func NewNode(timestamp int, data string, isTail bool) *Node {
-	payload := strconv.Itoa(timestamp) + data
+func NewNode(timestamp string, data string, isTail bool) *Node {
+	payload := timestamp + data
 	hash := Rehash(payload)
 	node := &Node{
 		timestamp:  timestamp,
@@ -329,7 +329,7 @@ func NewNode(timestamp int, data string, isTail bool) *Node {
 }
 
 func (n *Node) Key() string {
-	return StrEncodeKey(n.level, fmt.Sprintf("%d", n.timestamp))
+	return StrEncodeKey(n.level, fmt.Sprintf("%s", n.timestamp))
 }
 
 func (n *Node) Value() string {
@@ -350,7 +350,7 @@ func (n *Node) ValueWithKids() string {
 }
 
 func (n *Node) String() string {
-	return fmt.Sprintf("Node(timestamp=%d, level=%d)", n.timestamp, n.level)
+	return fmt.Sprintf("Node(timestamp=%q, level=%d)", n.timestamp, n.level)
 }
 
 // -1 when left is less, 0 when equal, 1 when right is less
@@ -526,7 +526,7 @@ func must(cond bool, msg string) {
 // }
 
 type Delta struct {
-	key    int    // timestamp
+	key    string // timestamp
 	typ    string // "add", "remove", "update"
 	source string
 	target string
@@ -555,37 +555,6 @@ func (n *NodeIter) Left() *Node {
 		n.P = n.P.left
 	}
 	return n.P
-}
-
-type LessEqual struct {
-	Iter
-	Key int
-
-	p    *Node
-	done bool
-}
-
-var _ Iter = &LessEqual{}
-
-func (b *LessEqual) Current() *Node {
-	if b.done {
-		return nil
-	}
-	if b.p == nil {
-		return b.Iter.Current()
-	}
-	return b.p
-}
-func (b *LessEqual) Left() *Node {
-	if b.done {
-		return nil
-	}
-	b.p = b.Iter.Left()
-	if b.p == nil || b.p.timestamp <= b.Key {
-		b.done = true
-		b.p = nil
-	}
-	return b.p
 }
 
 type Boundary struct {
@@ -674,10 +643,7 @@ func Diff(source, target *Tree) (out DeltaTrio) {
 			add = append(add, Delta{key: p2.timestamp, typ: "add", source: "", target: p2.data})
 		}
 	}
-	emitAddSubtree := func(p2 Iter, limit *Node) {
-		if limit != nil {
-			p2 = &LessEqual{Iter: p2, Key: limit.timestamp}
-		}
+	emitAddSubtree := func(p2 Iter) {
 		for p := p2.Current(); p != nil; p = p2.Left() {
 			emitAdd(p)
 		}
@@ -693,7 +659,7 @@ func Diff(source, target *Tree) (out DeltaTrio) {
 		moreNodes2 := []Iter{}
 
 		for l, r := nodes1.Current(), nodes2.Current(); l != nil && r != nil; {
-			fmt.Printf("L%d l=%v r=%v key %d %d\n", level, l.merkleHash[:4], r.merkleHash[:4], l.timestamp, r.timestamp)
+			fmt.Printf("L%d l=%v r=%v key %q %q\n", level, l.merkleHash[:4], r.merkleHash[:4], l.timestamp, r.timestamp)
 			switch l.CompareKey(r) {
 			case -1: // l < r
 				// the r subtree is missing, push it down or add if we're on level0
@@ -752,7 +718,7 @@ func Diff(source, target *Tree) (out DeltaTrio) {
 			for r := nodes2.Current(); r != nil; {
 				start := r.Bottom()
 				r = nodes2.Left()
-				emitAddSubtree(start.Iter(), r)
+				emitAddSubtree(&Boundary{Iter: start.Iter()})
 			}
 			return
 		}
@@ -796,11 +762,11 @@ func DeserializeLevel0(kv KV) (*Tree, error) {
 		encodedValue := cur.Value()
 		_, key := StrDecodeKey(string(encodedKey))
 		_, value := StrDecodeValue(string(encodedValue))
-		intKey := MustAtoi(key)
-		if IsTailKey(intKey) {
+		// intKey := MustAtoi(key)
+		if IsTailKey(key) {
 			continue
 		}
-		m := &Message{timestamp: intKey, data: value}
+		m := &Message{timestamp: key, data: value}
 		level0 = append(level0, m)
 	}
 	return NewTree(level0), nil
@@ -878,7 +844,7 @@ func (t *Tree) SerializeJSON(gen int, w io.Writer) error {
 			}
 			kidsJSON += "]"
 
-			fmt.Fprintf(w, "{\"hash\":\"%s\",\"level\":%d,\"timestamp\":%d,\"data\":\"%s\",\"kids\":%s}",
+			fmt.Fprintf(w, "{\"hash\":\"%s\",\"level\":%d,\"timestamp\":%s,\"data\":\"%s\",\"kids\":%s}",
 				n.merkleHash, n.level, n.timestamp, n.data, kidsJSON)
 		}
 	}

@@ -53,11 +53,12 @@ func StrDecodeKeyWithKids(data string) string {
 	return data[:HashSize]
 }
 
-func StrEncodeValueWithKids(level int8, kids []string, key int, data string) string {
+func StrEncodeValueWithKids(level int8, kids []string, key string, data string) string {
 	// level, nKids, kids, data
 	var sb strings.Builder
 	sb.WriteString(fmt.Sprintf("%02d", level))
-	sb.WriteString(fmt.Sprintf("%010d", key))
+	sb.WriteString(fmt.Sprintf("%05d", len(key)))
+	sb.WriteString(key)
 	sb.WriteString(fmt.Sprintf("%04d", len(kids)))
 	for _, kid := range kids {
 		sb.WriteString(kid[:HashSize])
@@ -66,16 +67,19 @@ func StrEncodeValueWithKids(level int8, kids []string, key int, data string) str
 	return sb.String()
 }
 
-func StrDecodeValueWithKids(data string) (level int8, kids []string, key int, data_ string) {
+func StrDecodeValueWithKids(data string) (level int8, kids []string, key string, data_ string) {
 	_, err := fmt.Sscanf(data[:2], "%d", &level)
 	mustNil(err)
-	_, err = fmt.Sscanf(data[2:12], "%d", &key)
+	keySize := 0
+	_, err = fmt.Sscanf(data[2:7], "%d", &keySize)
 	mustNil(err)
+	key = data[7 : 7+keySize]
+	offset := 7 + keySize
 	nKids := 0
-	_, err = fmt.Sscanf(data[12:16], "%d", &nKids)
+	_, err = fmt.Sscanf(data[offset:offset+4], "%d", &nKids)
 	mustNil(err)
+	offset += 4
 	kids = make([]string, nKids)
-	offset := 16
 	for i := range nKids {
 		kids[i] = data[offset : offset+HashSize]
 		offset += HashSize
