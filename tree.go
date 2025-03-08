@@ -643,7 +643,7 @@ func Diff(source, target *Tree) (out DeltaTrio) {
 			add = append(add, Delta{key: p2.timestamp, typ: "add", source: "", target: p2.data})
 		}
 	}
-	emitAddSubtree := func(p2 Iter) {
+	emitAddAll := func(p2 Iter) {
 		for p := p2.Current(); p != nil; p = p2.Left() {
 			emitAdd(p)
 		}
@@ -715,10 +715,8 @@ func Diff(source, target *Tree) (out DeltaTrio) {
 			return
 		} else if len(moreNodes1) == 0 { // left is empty, add everything from the right
 			nodes2 = NewChain(moreNodes2...)
-			for r := nodes2.Current(); r != nil; {
-				start := r.Bottom()
-				r = nodes2.Left()
-				emitAddSubtree(&Boundary{Iter: start.Iter()})
+			for r := nodes2.Current(); r != nil; r = nodes2.Left() {
+				emitAddAll(&Boundary{Iter: r.Bottom().Iter()})
 			}
 			return
 		}
