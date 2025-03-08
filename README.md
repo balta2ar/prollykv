@@ -12,7 +12,7 @@ TODO
   + then Deserialize starting from that root and read only the relevant level0 nodes
     - problem: the tree currently doesn't store children hashes in the nodes
     - we store hashes and keys (boundaries), but if we store multiple generations, that's not enough
-- switch key from int to string so that I can experiment on user library
++ switch key from int to string so that I can experiment on user library
 + build trees for the latest N generations of a library
   + sample data
   + see how storage size grows vs naive approach (saving JSONs) -- sample data
