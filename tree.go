@@ -248,7 +248,7 @@ func BaseLevel(messages []*Message) *Level {
 		nodes = append(nodes, NewNode(m.timestamp, m.data, notTail))
 	}
 	const isTail = true
-	nodes = append(nodes, NewNode(-1, "tail", isTail))
+	nodes = append(nodes, NewNode(TailKey(), "tail", isTail))
 	level.tail = LinkNodes(nodes)[len(nodes)-1]
 	level.size = len(nodes)
 	return level
@@ -312,6 +312,9 @@ func (n *Node) Iter() Iter { return &NodeIter{P: n} }
 //   in this design, it's on the right side.
 //
 
+func TailKey() int           { return 0 }
+func IsTailKey(key int) bool { return key == TailKey() }
+
 func NewNode(timestamp int, data string, isTail bool) *Node {
 	payload := strconv.Itoa(timestamp) + data
 	hash := Rehash(payload)
@@ -331,6 +334,19 @@ func (n *Node) Key() string {
 
 func (n *Node) Value() string {
 	return StrEncodeValue(n.merkleHash, n.data)
+}
+
+func (n *Node) KeyWithKids() string {
+	// hash
+	return StrEncodeKeyWithKids(n.merkleHash)
+}
+
+func (n *Node) ValueWithKids() string {
+	kids := []string{}
+	n.Kids(func(n *Node) {
+		kids = append(kids, n.merkleHash)
+	})
+	return StrEncodeValueWithKids(n.level, kids, n.timestamp, n.data)
 }
 
 func (n *Node) String() string {
@@ -372,12 +388,27 @@ func (n *Node) Bottom() *Node {
 	return n
 }
 
+func (n *Node) Kids(cb func(*Node)) {
+	if n.down == nil {
+		return
+	}
+	n.down.UntilBoundary(cb)
+}
+
+func (n *Node) ListKids() (out []string) {
+	n.Kids(func(p *Node) {
+		out = append(out, p.merkleHash)
+	})
+	return out
+}
+
 func (n *Node) UntilBoundary(cb func(*Node)) {
-	for p := n; p != nil; p = p.left {
-		cb(p)
+	cb(n)
+	for p := n.left; p != nil; p = p.left {
 		if p.IsBoundary() {
 			break
 		}
+		cb(p)
 	}
 }
 
@@ -468,31 +499,31 @@ func must(cond bool, msg string) {
 
 // ----------------------------------------------------------------
 
-func GetNonBoundaryNodes(nodes []*Node) []*Node {
-	var out []*Node
-	for _, n := range nodes {
-		fmt.Println("n.down ", n.down)
-		if n.down == nil {
-			continue
-		}
-		n.down.UntilBoundary(func(p *Node) {
-			out = append(out, p)
-		})
-	}
-	slices.Reverse(out)
-	return out
-}
+// func GetNonBoundaryNodes(nodes []*Node) []*Node {
+// 	var out []*Node
+// 	for _, n := range nodes {
+// 		fmt.Println("n.down ", n.down)
+// 		if n.down == nil {
+// 			continue
+// 		}
+// 		n.down.UntilBoundary(func(p *Node) {
+// 			out = append(out, p)
+// 		})
+// 	}
+// 	slices.Reverse(out)
+// 	return out
+// }
 
-func GetNonBoundaryNodesForLevel0(nodes []*Node) []*Node {
-	var out []*Node
-	for _, n := range nodes {
-		n.Bottom().UntilBoundary(func(p *Node) {
-			out = append(out, p)
-		})
-	}
-	slices.Reverse(nodes)
-	return out
-}
+// func GetNonBoundaryNodesForLevel0(nodes []*Node) []*Node {
+// 	var out []*Node
+// 	for _, n := range nodes {
+// 		n.Bottom().UntilBoundary(func(p *Node) {
+// 			out = append(out, p)
+// 		})
+// 	}
+// 	slices.Reverse(nodes)
+// 	return out
+// }
 
 type Delta struct {
 	key    int    // timestamp
@@ -766,7 +797,7 @@ func DeserializeLevel0(kv KV) (*Tree, error) {
 		_, key := StrDecodeKey(string(encodedKey))
 		_, value := StrDecodeValue(string(encodedValue))
 		intKey := MustAtoi(key)
-		if intKey == -1 {
+		if IsTailKey(intKey) {
 			continue
 		}
 		m := &Message{timestamp: intKey, data: value}
@@ -779,6 +810,51 @@ func MustAtoi(s string) int {
 	v, err := strconv.Atoi(s)
 	mustNil(err)
 	return v
+}
+
+func (t *Tree) SerializeWithKids(gen int, onto KV) error {
+	for _, level := range t.levels {
+		for n := level.tail; n != nil; n = n.left {
+			key := StrEncodeKeyWithKids(n.merkleHash)
+			value := StrEncodeValueWithKids(n.level, n.ListKids(), n.timestamp, n.data)
+			err := onto.Set([]byte(key), []byte(value))
+			if err != nil {
+				return err
+			}
+		}
+	}
+	rootKeyName := fmt.Sprintf("root:%d", gen)
+	return onto.Set([]byte(rootKeyName), []byte(t.Root().merkleHash))
+}
+
+func DeserializeWithKids(gen int, kv KV) (*Tree, error) {
+	rootKeyName := fmt.Sprintf("root:%d", gen)
+	kvKey, found, err := kv.Get([]byte(rootKeyName))
+	mustNil(err)
+	mustTrue(found, "root key not found: %q", rootKeyName)
+	hashes := []string{string(kvKey)}
+	nextHashes := []string{}
+	messages := []*Message{}
+	for len(hashes) > 0 {
+		for _, key := range hashes {
+			value, found, err := kv.Get([]byte(key))
+			mustNil(err)
+			mustTrue(found, "key not found: %q", key)
+			kidLevel, kids, kidKey, data := StrDecodeValueWithKids(string(value))
+			if kidLevel == 0 {
+				if !IsTailKey(kidKey) {
+					messages = append(messages, &Message{timestamp: kidKey, data: data})
+				}
+			} else {
+				nextHashes = append(nextHashes, kids...)
+			}
+		}
+		hashes, nextHashes = nextHashes, []string{}
+	}
+	sort.Slice(messages, func(i, j int) bool {
+		return messages[i].timestamp < messages[j].timestamp
+	})
+	return NewTree(messages), nil
 }
 
 // func (this *Tree) GetNode(level int8, key []byte) (*Node, error) {

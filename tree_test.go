@@ -11,6 +11,7 @@ import (
 func generate1(n int) []*Message {
 	m := []*Message{}
 	for i := range n {
+		i := i + 1
 		data := fmt.Sprintf("value %d", i)
 		m = append(m, &Message{timestamp: i, data: data})
 	}
@@ -20,6 +21,7 @@ func generate1(n int) []*Message {
 func generate2(n int) []*Message {
 	m := []*Message{}
 	for i := range n {
+		i := i + 1
 		data := fmt.Sprintf("value2 %d", i)
 		m = append(m, &Message{timestamp: i, data: data})
 	}
@@ -157,6 +159,21 @@ func TestSerializeLevel0(t *testing.T) {
 	kv.MustReset()
 	assert.Nil(t, t1.SerializeLevel0(kv))
 	t2, err := DeserializeLevel0(kv)
+	assert.Nil(t, err)
+	d := Diff(t1, t2)
+	assert.Len(t, d.Add, 0)
+	assert.Len(t, d.Update, 0)
+	assert.Len(t, d.Remove, 0)
+}
+
+func TestSerializeWithKids(t *testing.T) {
+	t1 := NewTree(generate1(10))
+	kv := NewKVFile()
+	kv.MustReset()
+	gen := 42
+	t1.Dot("t1.dot")
+	assert.Nil(t, t1.SerializeWithKids(gen, kv))
+	t2, err := DeserializeWithKids(gen, kv)
 	assert.Nil(t, err)
 	d := Diff(t1, t2)
 	assert.Len(t, d.Add, 0)
