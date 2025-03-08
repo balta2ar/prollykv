@@ -742,21 +742,20 @@ func Diff(source, target *Tree) (out DeltaTrio) {
 	return out
 }
 
-func (t *Tree) Serialize(onto KV) error {
-	for _, level := range t.levels {
-		for n := level.tail; n != nil; n = n.left {
-			key := n.Key()
-			value := n.Value()
-			err := onto.Set([]byte(key), []byte(value))
-			if err != nil {
-				return err
-			}
+func (t *Tree) SerializeLevel0(onto KV) error {
+	level := t.levels[0]
+	for n := level.tail; n != nil; n = n.left {
+		key := n.Key()
+		value := n.Value()
+		err := onto.Set([]byte(key), []byte(value))
+		if err != nil {
+			return err
 		}
 	}
 	return onto.Set([]byte("root"), []byte(t.Root().Key()))
 }
 
-func Deserialize(kv KV) (*Tree, error) {
+func DeserializeLevel0(kv KV) (*Tree, error) {
 	cur := kv.Cursor()
 	start := StrEncodeKey(0, "")
 	cur.Goto([]byte(start))

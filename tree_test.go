@@ -151,12 +151,12 @@ func ListBasedDiff(a, b []*Message) (out DeltaTrio) {
 	return out
 }
 
-func TestSerialize(t *testing.T) {
+func TestSerializeLevel0(t *testing.T) {
 	t1 := NewTree(generate1(10))
 	kv := NewKVFile()
 	kv.MustReset()
-	assert.Nil(t, t1.Serialize(kv))
-	t2, err := Deserialize(kv)
+	assert.Nil(t, t1.SerializeLevel0(kv))
+	t2, err := DeserializeLevel0(kv)
 	assert.Nil(t, err)
 	d := Diff(t1, t2)
 	assert.Len(t, d.Add, 0)
