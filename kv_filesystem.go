@@ -1,7 +1,6 @@
 package main
 
 import (
-	"fmt"
 	"os"
 	"path/filepath"
 	"sort"
@@ -14,9 +13,11 @@ type FileSystem struct {
 
 var _ KV = &FileSystem{}
 
+var BaseDir = filepath.Join(os.TempDir(), "prollykv")
+
 func NewKVFile() *FileSystem {
 	this := &FileSystem{
-		dir: filepath.Join(os.TempDir(), "prollykv"),
+		dir: BaseDir,
 	}
 	this.MustBaseDir()
 	return this
@@ -36,7 +37,6 @@ func (kv *FileSystem) Get(key []byte) ([]byte, bool, error) {
 
 func (kv *FileSystem) Set(key []byte, value []byte) error {
 	path := filepath.Join(kv.dir, string(key))
-	fmt.Printf("Set %q %q\n", path, value)
 	return os.WriteFile(path, value, 0644)
 }
 

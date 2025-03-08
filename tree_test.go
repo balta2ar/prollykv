@@ -3,6 +3,8 @@ package main
 import (
 	"fmt"
 	"math/rand/v2"
+	"os"
+	"path/filepath"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -171,7 +173,6 @@ func TestSerializeWithKids(t *testing.T) {
 	kv := NewKVFile()
 	kv.MustReset()
 	gen := 42
-	t1.Dot("t1.dot")
 	assert.Nil(t, t1.SerializeWithKids(gen, kv))
 	t2, err := DeserializeWithKids(gen, kv)
 	assert.Nil(t, err)
@@ -179,4 +180,55 @@ func TestSerializeWithKids(t *testing.T) {
 	assert.Len(t, d.Add, 0)
 	assert.Len(t, d.Update, 0)
 	assert.Len(t, d.Remove, 0)
+}
+
+func TestSerializeJSON(t *testing.T) {
+	t1 := NewTree(generate1(10))
+	kv := NewKVFile()
+	kv.MustReset()
+	gen := 42
+	file, err := os.Create(filepath.Join(kv.dir, fmt.Sprintf("gen-%d.json", gen)))
+	assert.Nil(t, err)
+	defer file.Close()
+	assert.Nil(t, t1.SerializeJSON(gen, file))
+}
+
+func MustDirSize(path string) int {
+	var totalSize int
+	err := filepath.Walk(path, func(filePath string, info os.FileInfo, err error) error {
+		if err != nil {
+			return err
+		}
+		if !info.IsDir() {
+			totalSize += int(info.Size())
+		}
+		return nil
+	})
+	if err != nil {
+		panic(err)
+	}
+	return totalSize
+}
+
+func TestSizeSerializeJSON(t *testing.T) {
+	kv := NewKVFile()
+	kv.MustReset()
+	for gen := range 1000 {
+		t1 := NewTree(generate1(gen))
+		file, err := os.Create(filepath.Join(kv.dir, fmt.Sprintf("gen-%d.json", gen)))
+		assert.Nil(t, err)
+		defer file.Close()
+		assert.Nil(t, t1.SerializeJSON(gen, file))
+		fmt.Printf("%d,json,%d\n", gen, MustDirSize(kv.dir))
+	}
+}
+
+func TestSizeSerializeWithKids(t *testing.T) {
+	kv := NewKVFile()
+	kv.MustReset()
+	for gen := range 1000 {
+		t1 := NewTree(generate1(gen))
+		assert.Nil(t, t1.SerializeWithKids(gen, kv))
+		fmt.Printf("%d,prolly,%d\n", gen, MustDirSize(kv.dir))
+	}
 }

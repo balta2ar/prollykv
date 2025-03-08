@@ -5,6 +5,7 @@ import (
 	"encoding/binary"
 	"encoding/hex"
 	"fmt"
+	"io"
 	"os"
 	"slices"
 	"sort"
@@ -855,6 +856,36 @@ func DeserializeWithKids(gen int, kv KV) (*Tree, error) {
 		return messages[i].timestamp < messages[j].timestamp
 	})
 	return NewTree(messages), nil
+}
+
+func (t *Tree) SerializeJSON(gen int, w io.Writer) error {
+	fmt.Fprintf(w, "{\"gen\":%d,\"root\":\"%s\",\"nodes\":[", gen, t.Root().merkleHash)
+
+	first := true
+	for _, level := range t.levels {
+		for n := level.tail; n != nil; n = n.left {
+			if !first {
+				fmt.Fprint(w, ",")
+			}
+			first = false
+
+			kids := n.ListKids()
+			kidsJSON := "["
+			for i, kid := range kids {
+				if i > 0 {
+					kidsJSON += ","
+				}
+				kidsJSON += "\"" + kid + "\""
+			}
+			kidsJSON += "]"
+
+			fmt.Fprintf(w, "{\"hash\":\"%s\",\"level\":%d,\"timestamp\":%d,\"data\":\"%s\",\"kids\":%s}",
+				n.merkleHash, n.level, n.timestamp, n.data, kidsJSON)
+		}
+	}
+
+	fmt.Fprint(w, "]}")
+	return nil
 }
 
 // func (this *Tree) GetNode(level int8, key []byte) (*Node, error) {
