@@ -18,6 +18,15 @@ df['size'] = df['size'] / (1024 * 1024)
 
 # Create figure and axis
 fig, ax1 = plt.subplots(figsize=(10, 6))
+fig.patch.set_facecolor('white')
+ax1.set_facecolor('white')
+
+# Remove top and right borders
+for spine in ['top', 'right']:
+    ax1.spines[spine].set_visible(False)
+
+# Reduce margins
+plt.subplots_adjust(left=0.1, right=0.9, top=0.9, bottom=0.1)
 
 # Plot size on primary y-axis
 for t in df['type'].unique():
@@ -31,6 +40,7 @@ ax1.grid(True)
 
 # Create secondary y-axis for height
 ax2 = ax1.twinx()
+ax2.set_facecolor('white')
 for t in df['type'].unique():
     subset = df[df['type'] == t]
     ax2.plot(subset['generation'], subset['height'], marker='', markersize=4, linestyle='--', linewidth=1, color='green', label=f"Height - {t}", alpha=0.5)

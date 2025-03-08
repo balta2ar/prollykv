@@ -18,6 +18,6 @@ TODO
   + see how storage size grows vs naive approach (saving JSONs) -- sample data
   - igor's data
   - igor's data growth
+- partition storage by adding prefix, e.g. based on generation / timestamp
 - make a db to index changes between generations
 - kv iterator so that I can use it in Diff, compare on KV level without loading the whole tree
-- partition storage by adding prefix, e.g. based on generation / timestamp
