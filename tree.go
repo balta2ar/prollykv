@@ -286,20 +286,16 @@ func LinkNodes(nodes []*Node) []*Node {
 const HashSize = 64
 
 type Node struct {
-	level     int8
-	timestamp string
-	data      string
-	up        *Node
-	down      *Node
-	left      *Node
-	right     *Node
-	// nodeHash   string // node hash, sha256
+	level      int8
+	timestamp  string // key
+	data       string // value
+	up         *Node
+	down       *Node
+	left       *Node
+	right      *Node
 	merkleHash string // rolling merkle hash
 	boundary   *bool
 	isTail     bool
-	// key       []byte
-	// value     []byte
-	// hash       []byte // merkle hash
 }
 
 func (n *Node) Iter() Iter { return &NodeIter{P: n} }
@@ -776,6 +772,22 @@ func MustAtoi(s string) int {
 	return v
 }
 
+type CountingKV struct {
+	KV
+	stats map[string]int
+}
+
+func NewCountingKV(kv KV) *CountingKV { return &CountingKV{KV: kv, stats: map[string]int{}} }
+func (kv *CountingKV) Set(key []byte, value []byte) error {
+	kv.stats["set"]++
+	return kv.KV.Set(key, value)
+}
+func (kv *CountingKV) Get(key []byte) ([]byte, bool, error) {
+	kv.stats["get"]++
+	return kv.KV.Get(key)
+}
+func (kv *CountingKV) String() string { return fmt.Sprintf("CountingKV{stats=%v}", kv.stats) }
+
 func (t *Tree) SerializeWithKids(gen int, onto KV) error {
 	for _, level := range t.levels {
 		for n := level.tail; n != nil; n = n.left {
@@ -821,7 +833,8 @@ func DeserializeWithKids(gen int, kv KV) (*Tree, error) {
 	return NewTree(messages), nil
 }
 
-func (t *Tree) SerializeJSON(gen int, w io.Writer) error {
+func (t *Tree) SerializeJSON(gen int, w1 io.Writer) error {
+	w := &strings.Builder{}
 	fmt.Fprintf(w, "{\"gen\":%d,\"root\":\"%s\",\"nodes\":[", gen, t.Root().merkleHash)
 
 	first := true
@@ -848,7 +861,8 @@ func (t *Tree) SerializeJSON(gen int, w io.Writer) error {
 	}
 
 	fmt.Fprint(w, "]}")
-	return nil
+	_, err := w1.Write([]byte(w.String()))
+	return err
 }
 
 // func (this *Tree) GetNode(level int8, key []byte) (*Node, error) {
